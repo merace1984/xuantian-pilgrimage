@@ -236,13 +236,287 @@
 
         <div class="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-100 px-1">
           <span>符合條件：<strong id="filtered-count" class="text-brand-600 font-bold">732</strong> 間</span>
-          <span class="text-amber-700 font-medium cursor-pointer hover:underline" onclick="switchCounty('臺南市')">
-            📍 快速切換：台南 96 廟
-          </span>
+          <div class="flex items-center gap-2">
+            <button type="button" onclick="switchView('planner')" class="text-xs bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-bold px-2.5 py-0.5 rounded-lg flex items-center gap-1 shadow-sm transition">
+              <i data-lucide="route" class="w-3.5 h-3.5"></i>
+              <span>路線規劃</span>
+            </button>
+            <span class="text-amber-700 font-medium cursor-pointer hover:underline" onclick="switchCounty('臺南市')">
+              📍 台南 96 廟
+            </span>
+          </div>
         </div>
       </div>
 
-      <div id="map"></div>
+      <!-- 進行中行程導航浮動控制條 (有活動路線時顯示) -->
+      <div id="active-route-drawer" class="hidden absolute bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-96 bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-amber-200/80 p-3.5 z-20 space-y-2.5 transition-all">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+            <strong id="drawer-route-title" class="text-xs font-bold text-slate-800 line-clamp-1">進行中朝聖路線</strong>
+          </div>
+          <div class="flex items-center gap-1">
+            <button onclick="toggleRouteDrawerList()" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg text-xs" title="展開/收合站點清單">
+              <i data-lucide="list-ordered" class="w-4 h-4"></i>
+            </button>
+            <button onclick="clearActiveRoute()" class="text-rose-500 hover:text-rose-700 p-1 rounded-lg text-xs font-bold" title="結束/清除路線">
+              <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- 當前目標站點提示 -->
+        <div class="bg-amber-50 rounded-xl p-2.5 border border-amber-100 flex items-center justify-between">
+          <div>
+            <span class="text-[10px] text-amber-700 font-bold block" id="drawer-step-index">下一站（第 1 / 8 站）</span>
+            <strong class="text-sm font-bold text-slate-900 line-clamp-1" id="drawer-current-name">開基靈祐宮</strong>
+            <p class="text-[11px] text-slate-400" id="drawer-current-dist">距離前站約 1.2 公里</p>
+          </div>
+          <button id="drawer-btn-checkin" onclick="checkinCurrentStop()" class="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold shadow-sm transition active:scale-95 shrink-0 flex items-center gap-1">
+            <i data-lucide="check" class="w-3.5 h-3.5"></i>
+            <span>打卡</span>
+          </button>
+        </div>
+
+        <!-- 導航動作按鈕 -->
+        <div class="flex gap-2">
+          <a id="drawer-btn-nav-stop" href="#" target="_blank" class="flex-1 py-2 bg-sky-500 hover:bg-sky-600 active:scale-95 text-white font-bold rounded-xl text-xs shadow-sm flex items-center justify-center gap-1.5 transition">
+            <i data-lucide="navigation" class="w-3.5 h-3.5"></i>
+            <span>導航至本站</span>
+          </a>
+          <a id="drawer-btn-nav-multi" href="#" target="_blank" class="flex-1 py-2 bg-brand-600 hover:bg-brand-500 active:scale-95 text-white font-bold rounded-xl text-xs shadow-sm flex items-center justify-center gap-1.5 transition" title="使用 Google Maps 多點規劃完整連續導航">
+            <i data-lucide="map" class="w-3.5 h-3.5"></i>
+            <span>全程連續導航</span>
+          </a>
+        </div>
+
+        <!-- 展開的站點列表 -->
+        <div id="drawer-stops-list" class="hidden max-h-48 overflow-y-auto space-y-1 pt-1 border-t border-slate-100 text-xs">
+        </div>
+      </div>
+
+    </section>
+
+    <!-- View: Route Planner (智能朝聖路線規劃器) -->
+    <section id="view-planner" class="hidden flex-1 overflow-y-auto p-4 md:p-6 bg-slate-100">
+      <div class="max-w-4xl mx-auto space-y-5">
+        <!-- 頂部標題與說明 -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+          <div>
+            <h2 class="font-bold text-xl text-slate-800 flex items-center gap-2">
+              <i data-lucide="route" class="w-6 h-6 text-amber-500"></i>
+              智能朝聖路線規劃器
+            </h2>
+            <p class="text-xs text-slate-500 mt-1">
+              設定出發起點與欲造訪區域（可跨縣市與鄉鎮多選），自動為您運算<strong>未參拜廟宇最佳巡迴路徑</strong>，支援手動調序、儲存行程與 Google Maps 連續導航。
+            </p>
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            <button type="button" onclick="openSavedItinerariesModal()" class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl flex items-center gap-1.5 transition">
+              <i data-lucide="folder-clock" class="w-4 h-4 text-brand-600"></i>
+              <span>已存行程 (<strong id="saved-itin-count" class="text-brand-600">0</strong>)</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 規劃條件設定卡片 -->
+        <div id="planner-config-card" class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 space-y-5">
+          <!-- 步驟 1: 選擇出發起點 -->
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <label class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                <span class="w-5 h-5 rounded-full bg-amber-500 text-white flex items-center justify-center text-[11px] font-black">1</span>
+                選擇出發起點
+              </label>
+              <span id="planner-start-status" class="text-[11px] text-emerald-600 font-bold"></span>
+            </div>
+
+            <!-- 起點切換 Segment -->
+            <div class="grid grid-cols-3 gap-2 p-1 bg-slate-100 rounded-xl text-xs font-bold text-slate-600">
+              <button type="button" id="btn-start-mode-gps" onclick="setStartMode('gps')" class="py-2 rounded-lg bg-white text-brand-600 shadow-sm transition flex items-center justify-center gap-1">
+                <i data-lucide="crosshair" class="w-3.5 h-3.5"></i> 目前定位
+              </button>
+              <button type="button" id="btn-start-mode-temple" onclick="setStartMode('temple')" class="py-2 rounded-lg text-slate-600 hover:text-slate-900 transition flex items-center justify-center gap-1">
+                <i data-lucide="landmark" class="w-3.5 h-3.5"></i> 指定廟宇
+              </button>
+              <button type="button" id="btn-start-mode-custom" onclick="setStartMode('custom')" class="py-2 rounded-lg text-slate-600 hover:text-slate-900 transition flex items-center justify-center gap-1">
+                <i data-lucide="map-pin" class="w-3.5 h-3.5"></i> 自訂地點
+              </button>
+            </div>
+
+            <!-- 起點內容區塊 -->
+            <div id="start-panel-gps" class="p-3.5 bg-amber-50/70 rounded-xl border border-amber-100 flex items-center justify-between text-xs">
+              <div class="flex items-center gap-2">
+                <i data-lucide="locate" class="w-4 h-4 text-amber-600"></i>
+                <span id="gps-status-text" class="text-slate-700 font-medium">尚未取得 GPS 定位</span>
+              </div>
+              <button type="button" onclick="requestCurrentLocation()" class="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-bold rounded-lg transition shadow-sm">
+                取得定位
+              </button>
+            </div>
+
+            <div id="start-panel-temple" class="hidden space-y-2">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <select id="start-temple-county" onchange="onStartTempleCountyChange(this.value)" class="text-xs p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white">
+                  <option value="">請先選擇縣市</option>
+                </select>
+                <select id="start-temple-select" onchange="onStartTempleSelect(this.value)" class="text-xs p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white" disabled>
+                  <option value="">請選擇廟宇作為起點</option>
+                </select>
+              </div>
+            </div>
+
+            <div id="start-panel-custom" class="hidden space-y-2">
+              <div class="flex gap-2">
+                <input type="text" id="start-custom-address" placeholder="輸入起點地址或地標（如：台南火車站、高鐵左營站）" class="flex-1 text-xs p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:border-brand-500" />
+                <button type="button" onclick="geocodeCustomAddress()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold shrink-0 transition">
+                  搜尋定位
+                </button>
+              </div>
+              <!-- 快捷起點 -->
+              <div class="flex items-center gap-1.5 flex-wrap text-[11px] text-slate-500 pt-1">
+                <span>推薦快捷起點：</span>
+                <button type="button" onclick="setPresetStart('台南火車站', 22.9972, 120.2128)" class="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded-md font-medium">台南火車站</button>
+                <button type="button" onclick="setPresetStart('高鐵左營站', 22.6874, 120.3082)" class="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded-md font-medium">高鐵左營站</button>
+                <button type="button" onclick="setPresetStart('高鐵台中站', 24.1121, 120.6157)" class="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded-md font-medium">高鐵台中站</button>
+                <button type="button" onclick="setPresetStart('名間松柏嶺受天宮', 23.8344, 120.6601)" class="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded-md font-medium">松柏嶺受天宮</button>
+                <button type="button" onclick="setPresetStart('台南北極殿(大上帝廟)', 22.9951, 120.2072)" class="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded-md font-medium">台南北極殿</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 步驟 2: 設定區域 (可多選) -->
+          <div class="space-y-3 pt-4 border-t border-slate-100">
+            <div class="flex items-center justify-between">
+              <label class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                <span class="w-5 h-5 rounded-full bg-amber-500 text-white flex items-center justify-center text-[11px] font-black">2</span>
+                設定參拜區域（可跨縣市與多鄉鎮複選）
+              </label>
+              <span id="planner-region-stats" class="text-xs text-amber-700 font-bold bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200">
+                已選 0 區域（未參拜 0 廟）
+              </span>
+            </div>
+
+            <!-- 縣市切換列 -->
+            <div class="space-y-2">
+              <div class="text-[11px] text-slate-500 flex items-center justify-between">
+                <span>選擇縣市檢視其行政區：</span>
+                <div class="space-x-3">
+                  <button type="button" onclick="selectAllDistrictsInCurrentCounty()" class="text-brand-600 font-bold hover:underline">全選當前縣市鄉鎮</button>
+                  <button type="button" onclick="clearAllSelectedDistricts()" class="text-slate-400 hover:underline">全部清空</button>
+                </div>
+              </div>
+              <div id="planner-county-chips" class="flex gap-1.5 overflow-x-auto pb-1.5 scrollbar-none">
+                <!-- 縣市 Chips 動態生成 -->
+              </div>
+            </div>
+
+            <!-- 當前縣市的鄉鎮複選區 -->
+            <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-slate-700" id="planner-current-county-label">臺南市 行政區選擇</span>
+                <span class="text-[11px] text-slate-400">點擊標籤進行勾選 / 取消</span>
+              </div>
+              <div id="planner-district-chips" class="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pr-1">
+                <!-- 鄉鎮市區 Checkbox Chips 動態生成 -->
+              </div>
+            </div>
+
+            <!-- 已勾選的整體摘要標籤 -->
+            <div id="planner-selected-summary" class="hidden flex flex-wrap gap-1.5 p-2.5 bg-amber-50/50 rounded-xl border border-dashed border-amber-300 text-xs">
+              <!-- 已選取的區塊標籤動態注入 -->
+            </div>
+          </div>
+
+          <!-- 步驟 3: 路線規劃偏好與條件 -->
+          <div class="space-y-3 pt-4 border-t border-slate-100">
+            <label class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+              <span class="w-5 h-5 rounded-full bg-amber-500 text-white flex items-center justify-center text-[11px] font-black">3</span>
+              規劃偏好與數量上限
+            </label>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div class="space-y-1">
+                <label class="font-semibold text-slate-600">造訪廟宇數量上限</label>
+                <select id="planner-max-count" class="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white font-medium">
+                  <option value="999">全部排入（區域內所有未參拜廟宇）</option>
+                  <option value="5">精選 5 廟（約 2-3 小時輕量漫遊）</option>
+                  <option value="8" selected>精選 8 廟（約半日充實朝聖）</option>
+                  <option value="12">精選 12 廟（約一日完整巡禮）</option>
+                  <option value="15">精選 15 廟（進階馬拉松路線）</option>
+                </select>
+              </div>
+              <div class="space-y-1">
+                <label class="font-semibold text-slate-600">包含狀態篩選</label>
+                <div class="flex items-center gap-2 pt-2">
+                  <label class="inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="planner-include-planned" checked class="rounded border-slate-300 text-amber-600 focus:ring-amber-500 w-4 h-4">
+                    <span class="ml-2 text-xs text-slate-700">一併排入已標註「規劃中 (🟡)」之廟宇</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 開始運算按鈕 -->
+          <div class="pt-2">
+            <button type="button" onclick="calculateOptimizedRoute()" id="btn-start-optimize" class="w-full py-3.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 active:scale-[0.99] text-white font-bold rounded-2xl shadow-lg shadow-amber-500/25 flex items-center justify-center gap-2 text-sm transition">
+              <i data-lucide="sparkles" class="w-5 h-5 text-amber-200"></i>
+              <span>開始智能運算最佳參拜路線</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 運算結果編輯面板 (計算完成後顯示) -->
+        <div id="planner-result-card" class="hidden bg-white rounded-2xl p-5 shadow-sm border border-slate-200 space-y-4">
+          <!-- 結果摘要列 -->
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-amber-50/70 border border-amber-200 rounded-2xl">
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="text-xs bg-amber-500 text-white font-bold px-2 py-0.5 rounded-full">最佳化成果</span>
+                <input type="text" id="route-name-input" value="臺南市朝聖路線" class="font-bold text-base text-slate-800 bg-transparent border-b border-dashed border-amber-400 focus:outline-none focus:border-amber-600 px-1" />
+              </div>
+              <div class="flex items-center gap-3 text-xs text-slate-600 mt-2 flex-wrap">
+                <span>⛩️ 造訪廟宇：<strong id="route-stat-stops" class="text-amber-700 font-bold">0</strong> 間</span>
+                <span>📏 總移動里程：<strong id="route-stat-km" class="text-brand-600 font-bold">0.0</strong> 公里</span>
+                <span>⏱️ 預估總耗時：<strong id="route-stat-time" class="text-emerald-700 font-bold">--</strong></span>
+              </div>
+            </div>
+            <div class="flex gap-2">
+              <button type="button" onclick="recalculateCurrentRoute()" class="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm">
+                <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> 重整
+              </button>
+              <button type="button" onclick="resetPlannerToConfig()" class="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition shadow-sm">
+                修改條件
+              </button>
+            </div>
+          </div>
+
+          <!-- 站點編輯提示 -->
+          <div class="flex items-center justify-between text-xs text-slate-500 px-1">
+            <span>可自由點擊「▲ / ▼」調換順序或點擊「🗑️」移除個別站點：</span>
+            <button type="button" onclick="openAddTempleToRouteModal()" class="text-brand-600 font-bold hover:underline flex items-center gap-1">
+              <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i> 加入其他廟宇
+            </button>
+          </div>
+
+          <!-- 順序列表清單 -->
+          <div id="route-stops-container" class="space-y-2 max-h-[500px] overflow-y-auto pr-1">
+            <!-- 站點清單動態生成 -->
+          </div>
+
+          <!-- 底部操作列：儲存並啟動導航 -->
+          <div class="pt-3 border-t border-slate-100 flex flex-col sm:flex-row gap-3">
+            <button type="button" onclick="saveAndActivateRoute()" class="flex-1 py-3 bg-brand-600 hover:bg-brand-500 active:scale-[0.99] text-white font-bold rounded-xl text-sm shadow-md flex items-center justify-center gap-2 transition">
+              <i data-lucide="bookmark-check" class="w-4 h-4 text-brand-gold"></i>
+              <span>儲存並列入規劃中行程（地圖展示導航）</span>
+            </button>
+            <a id="btn-export-google-multi" href="#" target="_blank" class="py-3 px-5 bg-sky-500 hover:bg-sky-600 active:scale-[0.99] text-white font-bold rounded-xl text-sm shadow-md flex items-center justify-center gap-2 transition text-center shrink-0">
+              <i data-lucide="map" class="w-4 h-4"></i>
+              <span>Google Maps 全程連續導航</span>
+            </a>
+          </div>
+        </div>
+      </div>
     </section>
 
     <!-- View: List View -->
@@ -568,26 +842,30 @@
   </div>
 
   <!-- Bottom Navigation Tab Bar -->
-  <nav class="bg-white border-t border-slate-200 z-30 shrink-0 h-16 px-3 py-1.5 flex items-center justify-around gap-1.5">
-    <button class="nav-tab active flex flex-col items-center justify-center flex-1 py-1.5 px-1 rounded-2xl transition-all duration-200 bg-amber-100/70 text-brand-600 font-bold" onclick="switchView('map')">
-      <i data-lucide="map-pin" class="w-5 h-5 mb-0.5"></i>
-      <span class="text-[11px]">朝聖地圖</span>
+  <nav class="bg-white border-t border-slate-200 z-30 shrink-0 h-16 px-1.5 py-1 flex items-center justify-around gap-1">
+    <button class="nav-tab active flex flex-col items-center justify-center flex-1 py-1 px-0.5 rounded-2xl transition-all duration-200 bg-amber-100/70 text-brand-600 font-bold" onclick="switchView('map')">
+      <i data-lucide="map-pin" class="w-4 h-4 mb-0.5"></i>
+      <span class="text-[10px] md:text-[11px]">朝聖地圖</span>
     </button>
-    <button class="nav-tab flex flex-col items-center justify-center flex-1 py-1.5 px-1 rounded-2xl transition-all duration-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 font-medium" onclick="switchView('list')">
-      <i data-lucide="list" class="w-5 h-5 mb-0.5"></i>
-      <span class="text-[11px]">廟宇列表</span>
+    <button class="nav-tab flex flex-col items-center justify-center flex-1 py-1 px-0.5 rounded-2xl transition-all duration-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 font-medium" onclick="switchView('list')">
+      <i data-lucide="list" class="w-4 h-4 mb-0.5"></i>
+      <span class="text-[10px] md:text-[11px]">廟宇名錄</span>
     </button>
-    <button class="nav-tab flex flex-col items-center justify-center flex-1 py-1.5 px-1 rounded-2xl transition-all duration-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 font-medium" onclick="switchView('dashboard')">
-      <i data-lucide="trophy" class="w-5 h-5 mb-0.5"></i>
-      <span class="text-[11px]">進度統計</span>
+    <button class="nav-tab flex flex-col items-center justify-center flex-1 py-1 px-0.5 rounded-2xl transition-all duration-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 font-medium" onclick="switchView('planner')">
+      <i data-lucide="route" class="w-4 h-4 mb-0.5 text-amber-600"></i>
+      <span class="text-[10px] md:text-[11px]">路線規劃</span>
     </button>
-    <button class="nav-tab flex flex-col items-center justify-center flex-1 py-1.5 px-1 rounded-2xl transition-all duration-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 font-medium" onclick="switchView('timeline')">
-      <i data-lucide="image" class="w-5 h-5 mb-0.5"></i>
-      <span class="text-[11px]">足跡日誌</span>
+    <button class="nav-tab flex flex-col items-center justify-center flex-1 py-1 px-0.5 rounded-2xl transition-all duration-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 font-medium" onclick="switchView('dashboard')">
+      <i data-lucide="trophy" class="w-4 h-4 mb-0.5"></i>
+      <span class="text-[10px] md:text-[11px]">進度統計</span>
     </button>
-    <button class="nav-tab flex flex-col items-center justify-center flex-1 py-1.5 px-1 rounded-2xl transition-all duration-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 font-medium" onclick="switchView('settings')">
-      <i data-lucide="settings" class="w-5 h-5 mb-0.5"></i>
-      <span class="text-[11px]">設定與同步</span>
+    <button class="nav-tab flex flex-col items-center justify-center flex-1 py-1 px-0.5 rounded-2xl transition-all duration-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 font-medium" onclick="switchView('timeline')">
+      <i data-lucide="image" class="w-4 h-4 mb-0.5"></i>
+      <span class="text-[10px] md:text-[11px]">足跡日誌</span>
+    </button>
+    <button class="nav-tab flex flex-col items-center justify-center flex-1 py-1 px-0.5 rounded-2xl transition-all duration-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 font-medium" onclick="switchView('settings')">
+      <i data-lucide="settings" class="w-4 h-4 mb-0.5"></i>
+      <span class="text-[10px] md:text-[11px]">設定備份</span>
     </button>
   </nav>
 
@@ -718,6 +996,55 @@
         <span class="text-xs text-slate-400">訪客模式（唯讀瀏覽）</span>
         <button onclick="document.getElementById('temple-modal').classList.add('hidden')" class="px-5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl text-xs transition">
           關閉視窗
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: 已存行程列表 -->
+  <div id="saved-itineraries-modal" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden flex items-center justify-center p-4 transition-all">
+    <div class="bg-white w-full max-w-lg max-h-[85vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+      <div class="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+        <h3 class="font-bold text-base text-slate-800 flex items-center gap-2">
+          <i data-lucide="folder-clock" class="w-5 h-5 text-amber-500"></i>
+          已儲存的朝聖行程
+        </h3>
+        <button onclick="closeSavedItinerariesModal()" class="p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-200 transition">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <div id="saved-itineraries-list" class="flex-1 overflow-y-auto p-4 space-y-3">
+        <!-- 行程卡片動態渲染 -->
+      </div>
+      <div class="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
+        <button onclick="closeSavedItinerariesModal()" class="px-5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl text-xs transition">
+          關閉
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: 搜尋並加入廟宇至路線 -->
+  <div id="add-temple-to-route-modal" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden flex items-center justify-center p-4 transition-all">
+    <div class="bg-white w-full max-w-md max-h-[80vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+      <div class="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+        <h3 class="font-bold text-base text-slate-800 flex items-center gap-2">
+          <i data-lucide="plus-circle" class="w-5 h-5 text-brand-600"></i>
+          加入其他廟宇至行程
+        </h3>
+        <button onclick="closeAddTempleToRouteModal()" class="p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-200 transition">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <div class="p-4 border-b border-slate-100 space-y-2">
+        <input type="text" id="add-temple-search-input" oninput="filterAddTempleList(this.value)" placeholder="輸入廟名、鄉鎮或地址關鍵字搜尋..." class="w-full text-xs p-3 rounded-xl border border-slate-200 focus:outline-none focus:border-brand-500 bg-slate-50 focus:bg-white" />
+      </div>
+      <div id="add-temple-results-list" class="flex-1 overflow-y-auto p-4 space-y-2 max-h-80">
+        <!-- 搜尋候選廟宇動態渲染 -->
+      </div>
+      <div class="p-3 bg-slate-50 border-t border-slate-100 flex justify-end">
+        <button onclick="closeAddTempleToRouteModal()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl text-xs transition">
+          取消
         </button>
       </div>
     </div>

@@ -9,6 +9,11 @@ db.version(1).stores({
   records: "templeId, status, visitDate, updatedAt",
   photos: "++id, templeId, createdAt"
 });
+db.version(2).stores({
+  records: "templeId, status, visitDate, updatedAt",
+  photos: "++id, templeId, createdAt",
+  itineraries: "id, createdAt, name, status"
+});
 
 // === 2. 全域狀態 ===
 let userRecordsMap = {};      // templeId -> record
@@ -19,6 +24,16 @@ let currentTempPhotos = [];   // modal 暫存照片
 let map = null;
 let markersCluster = null;
 let markersMap = {};          // templeId -> marker
+
+// 智能路線規劃器狀態
+let plannerStartPoint = null;          // { type: 'gps'|'temple'|'custom', name: '', lat: 0, lon: 0 }
+let plannerSelectedDistricts = new Set(); // Set of "county:district" e.g. "臺南市:中西區"
+let plannerCurrentCounty = "臺南市";
+let plannerCalculatedRoute = [];       // array of temple objects in optimized sequence
+let activeNavItinerary = null;         // currently active itinerary displayed on map
+let activeRoutePolyline = null;
+let activeRouteMarkers = [];
+let activeRouteStopIndex = 0;
 
 // Firebase 實例與狀態
 let fbApp = null;
@@ -540,7 +555,7 @@ function flyToCounty(countyName) {
 
 // === 7. 視圖切換 (Tab Switcher) ===
 window.switchView = function(viewName) {
-  const views = ["map", "list", "dashboard", "timeline", "settings"];
+  const views = ["map", "list", "planner", "dashboard", "timeline", "settings"];
   views.forEach(v => {
     const el = document.getElementById(`view-${v}`);
     if (el) el.classList.toggle("hidden", v !== viewName);
@@ -563,6 +578,8 @@ window.switchView = function(viewName) {
     }, 100);
   } else if (viewName === "list") {
     renderListView();
+  } else if (viewName === "planner") {
+    initPlannerView();
   } else if (viewName === "dashboard") {
     renderDashboardView();
   } else if (viewName === "timeline") {
@@ -864,6 +881,15 @@ async function saveCurrentRecord() {
       setCloudStatus("syncing", "雲端同步中...");
       await fbDb.collection("pilgrimages").doc(tid).set(record, { merge: true });
       setCloudStatus("online", "雲端已連線");
+    }
+
+    // 若當前有活動行程且打卡為目前站點，自動推進至下一站
+    if (activeNavItinerary && record.status === "visited") {
+      const stops = activeNavItinerary.templeIds;
+      if (stops[activeRouteStopIndex] === tid) {
+        activeRouteStopIndex++;
+      }
+      updateRouteNavDrawer();
     }
 
     document.getElementById("temple-modal").classList.add("hidden");
@@ -1616,3 +1642,874 @@ function bindEvents() {
     }
   });
 }
+
+// =========================================================================
+// === 13. 智能朝聖路線規劃系統 (Route Planner Engine) ===
+// =========================================================================
+
+// 球面距離公式 (Haversine formula, 單位: km)
+function calculateHaversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371; // 地球半徑 (km)
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+// TSP 啟發式最佳化演算法 (Nearest Neighbor + 2-Opt 消除交叉路徑)
+function optimizePilgrimageRoute(start, candidateTemples, maxStops = 999) {
+  if (!start || candidateTemples.length === 0) return [];
+
+  // 第一階段：以起點為出發點的最近鄰點法 (Nearest Neighbor)
+  const pool = [...candidateTemples];
+  const route = [];
+  let currentPos = { lat: start.lat, lon: start.lon };
+
+  const targetCount = Math.min(pool.length, maxStops);
+  for (let step = 0; step < targetCount; step++) {
+    let nearestIdx = -1;
+    let minDistance = Infinity;
+
+    for (let i = 0; i < pool.length; i++) {
+      const d = calculateHaversineKm(currentPos.lat, currentPos.lon, pool[i].lat, pool[i].lon);
+      if (d < minDistance) {
+        minDistance = d;
+        nearestIdx = i;
+      }
+    }
+
+    if (nearestIdx >= 0) {
+      const selected = pool.splice(nearestIdx, 1)[0];
+      route.push(selected);
+      currentPos = { lat: selected.lat, lon: selected.lon };
+    }
+  }
+
+  // 第二階段：2-Opt 局部搜尋消除折線交錯 (2-Opt Local Search)
+  if (route.length >= 4) {
+    let improved = true;
+    let maxIters = 40;
+    while (improved && maxIters > 0) {
+      improved = false;
+      maxIters--;
+      for (let i = 0; i < route.length - 1; i++) {
+        for (let k = i + 1; k < route.length; k++) {
+          const prevA = (i === 0) ? start : route[i - 1];
+          const nodeA = route[i];
+          const nodeB = route[k];
+          const nextB = (k === route.length - 1) ? null : route[k + 1];
+
+          const currentD = calculateHaversineKm(prevA.lat, prevA.lon, nodeA.lat, nodeA.lon) +
+                           (nextB ? calculateHaversineKm(nodeB.lat, nodeB.lon, nextB.lat, nextB.lon) : 0);
+          const newD = calculateHaversineKm(prevA.lat, prevA.lon, nodeB.lat, nodeB.lon) +
+                       (nextB ? calculateHaversineKm(nodeA.lat, nodeA.lon, nextB.lat, nextB.lon) : 0);
+
+          if (newD < currentD - 0.005) {
+            const segment = route.slice(i, k + 1).reverse();
+            route.splice(i, segment.length, ...segment);
+            improved = true;
+          }
+        }
+      }
+    }
+  }
+
+  return route;
+}
+
+// 初始化路線規劃視圖
+window.initPlannerView = function() {
+  initPlannerRegionUI();
+  populateStartTempleDropdowns();
+  updateSavedItinerariesCount();
+
+  if (!plannerStartPoint) {
+    setPresetStart("台南北極殿(大上帝廟)", 22.9951, 120.2072);
+  }
+  if (window.lucide) lucide.createIcons();
+};
+
+// 起點模式切換
+window.setStartMode = function(mode) {
+  const modes = ['gps', 'temple', 'custom'];
+  modes.forEach(m => {
+    const btn = document.getElementById(`btn-start-mode-${m}`);
+    const panel = document.getElementById(`start-panel-${m}`);
+    if (btn) {
+      if (m === mode) {
+        btn.className = "py-2 rounded-lg bg-white text-brand-600 shadow-sm transition flex items-center justify-center gap-1 font-bold";
+      } else {
+        btn.className = "py-2 rounded-lg text-slate-600 hover:text-slate-900 transition flex items-center justify-center gap-1";
+      }
+    }
+    if (panel) panel.classList.toggle("hidden", m !== mode);
+  });
+};
+
+// GPS 定位請求
+window.requestCurrentLocation = function() {
+  const statusEl = document.getElementById("gps-status-text");
+  if (!navigator.geolocation) {
+    if (statusEl) statusEl.textContent = "您的瀏覽器不支援 GPS 定位";
+    return;
+  }
+  if (statusEl) statusEl.textContent = "正在取得 GPS 定位中...";
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const lat = pos.coords.latitude;
+      const lon = pos.coords.longitude;
+      plannerStartPoint = { type: 'gps', name: '我的目前位置 (GPS)', lat, lon };
+      if (statusEl) statusEl.innerHTML = `<span class="text-emerald-700 font-bold">✓ 已定位 (${lat.toFixed(4)}, ${lon.toFixed(4)})</span>`;
+      updatePlannerStartStatusUI();
+    },
+    (err) => {
+      if (statusEl) statusEl.textContent = "定位失敗，請確認是否允許存取位置權限。";
+    },
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
+};
+
+// 填入指定廟宇作為起點的下拉選單
+function populateStartTempleDropdowns() {
+  const countySelect = document.getElementById("start-temple-county");
+  if (!countySelect || countySelect.options.length > 1) return;
+
+  const counties = [...new Set(TEMPLES_DATA.map(t => t.county))].filter(Boolean);
+  counties.forEach(c => {
+    const opt = document.createElement("option");
+    opt.value = c;
+    opt.textContent = c;
+    countySelect.appendChild(opt);
+  });
+}
+
+window.onStartTempleCountyChange = function(county) {
+  const templeSelect = document.getElementById("start-temple-select");
+  if (!templeSelect) return;
+  if (!county) {
+    templeSelect.innerHTML = '<option value="">請先選擇縣市</option>';
+    templeSelect.disabled = true;
+    return;
+  }
+
+  const filtered = TEMPLES_DATA.filter(t => t.county === county && t.lat && t.lon);
+  templeSelect.innerHTML = '<option value="">請選擇廟宇作為起點</option>' +
+    filtered.map(t => `<option value="${t.id}">${escapeHtml(t.name)} (${escapeHtml(t.district)})</option>`).join("");
+  templeSelect.disabled = false;
+};
+
+window.onStartTempleSelect = function(templeId) {
+  const t = TEMPLES_DATA.find(x => x.id === templeId);
+  if (t) {
+    plannerStartPoint = { type: 'temple', name: t.name, lat: t.lat, lon: t.lon, templeId: t.id };
+    updatePlannerStartStatusUI();
+  }
+};
+
+window.setPresetStart = function(name, lat, lon) {
+  plannerStartPoint = { type: 'preset', name, lat, lon };
+  updatePlannerStartStatusUI();
+};
+
+window.geocodeCustomAddress = async function() {
+  const input = document.getElementById("start-custom-address");
+  const query = input?.value.trim();
+  if (!query) {
+    alert("請輸入起點地址或地標關鍵字");
+    return;
+  }
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`);
+    const data = await res.json();
+    if (data && data.length > 0) {
+      const lat = parseFloat(data[0].lat);
+      const lon = parseFloat(data[0].lon);
+      plannerStartPoint = { type: 'custom', name: query, lat, lon };
+      updatePlannerStartStatusUI();
+      alert(`已定位起點：「${query}」`);
+    } else {
+      alert("查無此地標座標，請嘗試更精確的行政區或路名");
+    }
+  } catch (err) {
+    alert("搜尋定位連線逾時，請手動選擇廟宇或推薦快捷起點");
+  }
+};
+
+function updatePlannerStartStatusUI() {
+  const statusEl = document.getElementById("planner-start-status");
+  if (statusEl && plannerStartPoint) {
+    statusEl.textContent = `✓ 已設定起點：${plannerStartPoint.name}`;
+  }
+}
+
+// 初始化區域選擇 UI (所有縣市 Chips)
+function initPlannerRegionUI() {
+  const countyChipsContainer = document.getElementById("planner-county-chips");
+  if (!countyChipsContainer || countyChipsContainer.children.length > 0) return;
+
+  const allCounties = [
+    "臺南市", "高雄市", "雲林縣", "嘉義縣", "彰化縣", "屏東縣", "南投縣", "新北市",
+    "臺中市", "苗栗縣", "澎湖縣", "金門縣", "嘉義市", "宜蘭縣", "臺東縣", "花蓮縣",
+    "桃園市", "臺北市", "連江縣", "基隆市", "新竹市", "新竹縣"
+  ];
+
+  countyChipsContainer.innerHTML = allCounties.map(c => `
+    <button type="button" onclick="switchPlannerCounty('${c}')" id="chip-county-${c}"
+      class="county-chip px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition ${c === plannerCurrentCounty ? 'bg-brand-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}">
+      ${c}
+    </button>
+  `).join("");
+
+  switchPlannerCounty(plannerCurrentCounty);
+  if (plannerSelectedDistricts.size === 0) {
+    selectAllDistrictsInCurrentCounty();
+  }
+}
+
+window.switchPlannerCounty = function(county) {
+  plannerCurrentCounty = county;
+  document.querySelectorAll(".county-chip").forEach(btn => {
+    const isCur = btn.id === `chip-county-${county}`;
+    btn.className = `county-chip px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition ${isCur ? 'bg-brand-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`;
+  });
+
+  const labelEl = document.getElementById("planner-current-county-label");
+  if (labelEl) labelEl.textContent = `${county} 行政區選擇`;
+
+  renderDistrictChipsForCounty(county);
+};
+
+function renderDistrictChipsForCounty(county) {
+  const container = document.getElementById("planner-district-chips");
+  if (!container) return;
+
+  const countyTemples = TEMPLES_DATA.filter(t => t.county === county && t.district);
+  const distCounts = {};
+  countyTemples.forEach(t => {
+    distCounts[t.district] = (distCounts[t.district] || 0) + 1;
+  });
+
+  const sortedDistricts = Object.keys(distCounts).sort();
+  container.innerHTML = sortedDistricts.map(d => {
+    const key = `${county}:${d}`;
+    const isSelected = plannerSelectedDistricts.has(key);
+    return `
+      <button type="button" onclick="toggleDistrictSelection('${county}', '${d}')" id="chip-dist-${county}-${d}"
+        class="px-2.5 py-1 rounded-lg text-xs font-medium transition flex items-center gap-1 ${isSelected ? 'bg-amber-500 text-white shadow-sm font-bold' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'}">
+        <span>${d}</span>
+        <span class="text-[10px] opacity-75">(${distCounts[d]})</span>
+      </button>
+    `;
+  }).join("");
+
+  updatePlannerRegionSummary();
+}
+
+window.toggleDistrictSelection = function(county, district) {
+  const key = `${county}:${district}`;
+  if (plannerSelectedDistricts.has(key)) {
+    plannerSelectedDistricts.delete(key);
+  } else {
+    plannerSelectedDistricts.add(key);
+  }
+  renderDistrictChipsForCounty(plannerCurrentCounty);
+  updatePlannerRegionSummary();
+};
+
+window.selectAllDistrictsInCurrentCounty = function() {
+  const countyTemples = TEMPLES_DATA.filter(t => t.county === plannerCurrentCounty && t.district);
+  countyTemples.forEach(t => {
+    plannerSelectedDistricts.add(`${plannerCurrentCounty}:${t.district}`);
+  });
+  renderDistrictChipsForCounty(plannerCurrentCounty);
+  updatePlannerRegionSummary();
+};
+
+window.clearAllSelectedDistricts = function() {
+  plannerSelectedDistricts.clear();
+  renderDistrictChipsForCounty(plannerCurrentCounty);
+  updatePlannerRegionSummary();
+};
+
+function updatePlannerRegionSummary() {
+  const statsEl = document.getElementById("planner-region-stats");
+  const summaryBox = document.getElementById("planner-selected-summary");
+
+  let unvisitedCount = 0;
+  let totalCount = 0;
+
+  TEMPLES_DATA.forEach(t => {
+    const key = `${t.county}:${t.district}`;
+    if (plannerSelectedDistricts.has(key)) {
+      totalCount++;
+      const s = userRecordsMap[t.id]?.status || "unvisited";
+      if (s === "unvisited") unvisitedCount++;
+    }
+  });
+
+  if (statsEl) {
+    statsEl.textContent = `已選 ${plannerSelectedDistricts.size} 個行政區（未參拜 ${unvisitedCount} 廟 / 共 ${totalCount} 廟）`;
+  }
+
+  if (summaryBox) {
+    if (plannerSelectedDistricts.size === 0) {
+      summaryBox.classList.add("hidden");
+    } else {
+      summaryBox.classList.remove("hidden");
+      const list = Array.from(plannerSelectedDistricts);
+      summaryBox.innerHTML = list.map(item => {
+        const [c, d] = item.split(":");
+        return `
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-100/80 text-amber-800 rounded-md text-xs font-semibold">
+            ${c} ${d}
+            <button type="button" onclick="toggleDistrictSelection('${c}', '${d}')" class="hover:text-rose-600 font-black">×</button>
+          </span>
+        `;
+      }).join("");
+    }
+  }
+}
+
+// 開始計算最佳化路線
+window.calculateOptimizedRoute = function() {
+  if (!plannerStartPoint) {
+    alert("請先選擇出發起點（可使用 GPS 目前定位、指定廟宇或推薦快捷起點）");
+    return;
+  }
+
+  if (plannerSelectedDistricts.size === 0) {
+    alert("請至少選擇一個欲造訪的區域或鄉鎮！");
+    return;
+  }
+
+  const includePlanned = document.getElementById("planner-include-planned")?.checked ?? true;
+  const maxStops = parseInt(document.getElementById("planner-max-count")?.value || "999", 10);
+
+  // 篩選目標廟宇 (未參拜過，且具備有效經緯度)
+  const candidateTemples = TEMPLES_DATA.filter(t => {
+    const key = `${t.county}:${t.district}`;
+    if (!plannerSelectedDistricts.has(key)) return false;
+    if (!t.lat || !t.lon) return false;
+
+    // 若為起點本身，排除
+    if (plannerStartPoint.templeId && t.id === plannerStartPoint.templeId) return false;
+
+    const s = userRecordsMap[t.id]?.status || "unvisited";
+    if (s === "visited") return false; // 排除已參拜過
+    if (!includePlanned && s === "planned") return false;
+
+    return true;
+  });
+
+  if (candidateTemples.length === 0) {
+    alert("在您所勾選的區域內，目前沒有符合條件的「未參拜」廟宇！您可以勾選更多鄉鎮或放寬篩選條件。");
+    return;
+  }
+
+  // 執行 TSP 啟發式路徑計算
+  plannerCalculatedRoute = optimizePilgrimageRoute(plannerStartPoint, candidateTemples, maxStops);
+
+  // 自動命名路線
+  const nameInput = document.getElementById("route-name-input");
+  if (nameInput) {
+    nameInput.value = `${plannerCurrentCounty}玄帝朝聖巡禮 (${plannerCalculatedRoute.length}廟)`;
+  }
+
+  renderRouteStops();
+
+  // 切換至結果卡片
+  document.getElementById("planner-config-card")?.classList.add("hidden");
+  document.getElementById("planner-result-card")?.classList.remove("hidden");
+};
+
+// 重新整理/計算目前路線統計
+window.recalculateCurrentRoute = function() {
+  if (!plannerStartPoint || plannerCalculatedRoute.length === 0) return;
+  plannerCalculatedRoute = optimizePilgrimageRoute(plannerStartPoint, plannerCalculatedRoute, plannerCalculatedRoute.length);
+  renderRouteStops();
+};
+
+// 返回修改條件
+window.resetPlannerToConfig = function() {
+  document.getElementById("planner-result-card")?.classList.add("hidden");
+  document.getElementById("planner-config-card")?.classList.remove("hidden");
+};
+
+// 渲染站點編輯清單
+function renderRouteStops() {
+  const container = document.getElementById("route-stops-container");
+  if (!container) return;
+
+  let totalKm = 0;
+  let prevPos = { lat: plannerStartPoint.lat, lon: plannerStartPoint.lon };
+
+  const stopsHtml = [
+    // 起點標記卡片
+    `
+      <div class="flex items-center justify-between p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-xs">
+        <div class="flex items-center gap-2">
+          <span class="w-6 h-6 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-xs">🏁</span>
+          <div>
+            <strong class="text-emerald-900 font-bold">出發起點：${escapeHtml(plannerStartPoint.name)}</strong>
+            <p class="text-[11px] text-emerald-700">座標 (${plannerStartPoint.lat.toFixed(4)}, ${plannerStartPoint.lon.toFixed(4)})</p>
+          </div>
+        </div>
+        <span class="text-[11px] text-emerald-600 font-semibold">起點出發</span>
+      </div>
+    `
+  ];
+
+  plannerCalculatedRoute.forEach((t, idx) => {
+    const legKm = calculateHaversineKm(prevPos.lat, prevPos.lon, t.lat, t.lon);
+    totalKm += legKm;
+    prevPos = { lat: t.lat, lon: t.lon };
+
+    stopsHtml.push(`
+      <div class="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-200 hover:border-amber-400 text-xs shadow-sm transition">
+        <div class="flex items-center gap-3">
+          <span class="w-6 h-6 rounded-full bg-brand-gold text-brand-600 font-black flex items-center justify-center text-xs shrink-0 shadow-inner">
+            ${idx + 1}
+          </span>
+          <div>
+            <strong class="text-sm font-bold text-slate-800">${escapeHtml(t.name)}</strong>
+            <p class="text-[11px] text-slate-500">${escapeHtml(t.county)} ${escapeHtml(t.district)}・${escapeHtml(t.address || "無詳細地址")}</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2 shrink-0">
+          <span class="text-[11px] text-amber-700 font-bold bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+            +${legKm.toFixed(1)} km
+          </span>
+          <div class="flex items-center gap-1">
+            <button type="button" onclick="moveRouteStop(${idx}, -1)" ${idx === 0 ? 'disabled class="opacity-25 p-1"' : 'class="p-1 hover:bg-slate-100 rounded text-slate-600"'} title="上移">
+              ▲
+            </button>
+            <button type="button" onclick="moveRouteStop(${idx}, 1)" ${idx === plannerCalculatedRoute.length - 1 ? 'disabled class="opacity-25 p-1"' : 'class="p-1 hover:bg-slate-100 rounded text-slate-600"'} title="下移">
+              ▼
+            </button>
+            <button type="button" onclick="removeRouteStop(${idx})" class="p-1 hover:bg-rose-50 text-rose-500 rounded" title="從路線中移除">
+              🗑️
+            </button>
+          </div>
+        </div>
+      </div>
+    `);
+  });
+
+  container.innerHTML = stopsHtml.join("");
+
+  // 更新統計數據
+  const stopsEl = document.getElementById("route-stat-stops");
+  const kmEl = document.getElementById("route-stat-km");
+  const timeEl = document.getElementById("route-stat-time");
+
+  if (stopsEl) stopsEl.textContent = plannerCalculatedRoute.length;
+  if (kmEl) kmEl.textContent = totalKm.toFixed(1);
+
+  if (timeEl) {
+    const rideMins = Math.round((totalKm / 25) * 60);
+    const worshipMins = plannerCalculatedRoute.length * 15;
+    const totalMins = rideMins + worshipMins;
+    const h = Math.floor(totalMins / 60);
+    const m = totalMins % 60;
+    timeEl.textContent = h > 0 ? `約 ${h} 小時 ${m} 分` : `約 ${m} 分鐘`;
+  }
+
+  updateGoogleMultiNavUrl();
+  if (window.lucide) lucide.createIcons();
+}
+
+window.moveRouteStop = function(index, direction) {
+  const targetIndex = index + direction;
+  if (targetIndex < 0 || targetIndex >= plannerCalculatedRoute.length) return;
+  const temp = plannerCalculatedRoute[index];
+  plannerCalculatedRoute[index] = plannerCalculatedRoute[targetIndex];
+  plannerCalculatedRoute[targetIndex] = temp;
+  renderRouteStops();
+};
+
+window.removeRouteStop = function(index) {
+  if (plannerCalculatedRoute.length <= 1) {
+    alert("路線中至少需保留一間廟宇！");
+    return;
+  }
+  plannerCalculatedRoute.splice(index, 1);
+  renderRouteStops();
+};
+
+// 產生 Google Maps 全程連續多點導航 URL
+function updateGoogleMultiNavUrl() {
+  const btn = document.getElementById("btn-export-google-multi");
+  if (!btn || !plannerStartPoint || plannerCalculatedRoute.length === 0) return;
+
+  const origin = `${plannerStartPoint.lat},${plannerStartPoint.lon}`;
+  const lastStop = plannerCalculatedRoute[plannerCalculatedRoute.length - 1];
+  const dest = `${lastStop.lat},${lastStop.lon}`;
+
+  const middleStops = plannerCalculatedRoute.slice(0, -1);
+  const waypoints = middleStops.map(t => `${t.lat},${t.lon}`).join("|");
+
+  let url = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(dest)}`;
+  if (waypoints) {
+    url += `&waypoints=${encodeURIComponent(waypoints)}`;
+  }
+  btn.href = url;
+}
+
+// 儲存並列入規劃中行程
+window.saveAndActivateRoute = async function() {
+  if (!plannerStartPoint || plannerCalculatedRoute.length === 0) return;
+
+  const routeName = document.getElementById("route-name-input")?.value.trim() || `${plannerCurrentCounty}朝聖行程`;
+
+  // 1. 批次將未參拜廟宇更新為 planned
+  let updatedCount = 0;
+  for (const t of plannerCalculatedRoute) {
+    const existing = userRecordsMap[t.id];
+    if (!existing || existing.status !== "visited") {
+      const rec = {
+        templeId: t.id,
+        status: "planned",
+        visitDate: existing?.visitDate || "",
+        tags: existing?.tags || "",
+        notes: existing?.notes || "",
+        updatedAt: new Date().toISOString()
+      };
+      userRecordsMap[t.id] = rec;
+      await db.records.put(rec);
+      updatedCount++;
+
+      if (currentUser && fbDb) {
+        fbDb.collection("users").doc(currentUser.uid).collection("records").doc(t.id).set(rec, { merge: true }).catch(console.warn);
+      }
+    }
+  }
+
+  // 2. 建立行程紀錄物件
+  const itinId = "itin_" + Date.now();
+  const itinerary = {
+    id: itinId,
+    name: routeName,
+    createdAt: new Date().toISOString(),
+    startPoint: plannerStartPoint,
+    templeIds: plannerCalculatedRoute.map(t => t.id),
+    status: "active"
+  };
+
+  await db.itineraries.put(itinerary);
+  if (currentUser && fbDb) {
+    fbDb.collection("users").doc(currentUser.uid).collection("itineraries").doc(itinId).set(itinerary).catch(console.warn);
+  }
+
+  updateSavedItinerariesCount();
+  renderAllViews();
+
+  // 3. 在地圖上展示並啟動導航抽屜
+  activateRouteOnMap(itinerary);
+  switchView("map");
+};
+
+// 在地圖上繪製活動路線與啟動導航
+function activateRouteOnMap(itinerary) {
+  activeNavItinerary = itinerary;
+  activeRouteStopIndex = 0;
+
+  if (!map) return;
+
+  clearRouteLayersOnly();
+
+  const stops = itinerary.templeIds.map(id => TEMPLES_DATA.find(x => x.id === id)).filter(Boolean);
+  if (stops.length === 0) return;
+
+  // 1. 繪製折線 Polyline (金色高雅虛線)
+  const latlngs = [
+    [itinerary.startPoint.lat, itinerary.startPoint.lon],
+    ...stops.map(t => [t.lat, t.lon])
+  ];
+
+  activeRoutePolyline = L.polyline(latlngs, {
+    color: "#b89025",
+    weight: 5,
+    opacity: 0.9,
+    dashArray: "6, 8",
+    lineCap: "round"
+  }).addTo(map);
+
+  // 2. 繪製起點圖釘
+  const startIcon = L.divIcon({
+    className: "custom-start-pin",
+    html: `<div style="background:#059669;color:#fff;font-weight:bold;font-size:11px;padding:3px 8px;border-radius:12px;border:2px solid #fff;box-shadow:0 3px 8px rgba(0,0,0,0.3);white-space:nowrap;display:flex;align-items:center;gap:3px;">🏁 起點</div>`,
+    iconAnchor: [20, 20]
+  });
+  const startMarker = L.marker([itinerary.startPoint.lat, itinerary.startPoint.lon], { icon: startIcon });
+  startMarker.addTo(map);
+  activeRouteMarkers.push(startMarker);
+
+  // 3. 繪製各站序號圖釘
+  stops.forEach((t, idx) => {
+    const numIcon = L.divIcon({
+      className: "custom-route-step-pin",
+      html: `
+        <div style="background:#d4af37;color:#132c3f;font-weight:900;font-size:12px;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 3px 8px rgba(0,0,0,0.35);">
+          ${idx + 1}
+        </div>
+      `,
+      iconSize: [26, 26],
+      iconAnchor: [13, 13]
+    });
+    const m = L.marker([t.lat, t.lon], { icon: numIcon, zIndexOffset: 1000 + idx });
+    m.bindPopup(`
+      <div class="text-xs p-1 space-y-1">
+        <strong class="text-sm font-bold text-slate-800">第 ${idx + 1} 站：${escapeHtml(t.name)}</strong>
+        <p class="text-slate-500">${escapeHtml(t.county)} ${escapeHtml(t.district)}</p>
+        <div class="flex gap-1.5 pt-1">
+          <a href="https://www.google.com/maps/dir/?api=1&destination=${t.lat},${t.lon}" target="_blank" class="flex-1 text-center py-1 bg-sky-500 text-white rounded font-bold">導航前往</a>
+          <button onclick="openTempleModal('${t.id}')" class="flex-1 py-1 bg-brand-600 text-white rounded font-bold">打卡記事</button>
+        </div>
+      </div>
+    `);
+    m.addTo(map);
+    activeRouteMarkers.push(m);
+  });
+
+  map.fitBounds(activeRoutePolyline.getBounds().pad(0.2));
+  updateRouteNavDrawer();
+}
+
+function clearRouteLayersOnly() {
+  if (activeRoutePolyline && map) {
+    map.removeLayer(activeRoutePolyline);
+    activeRoutePolyline = null;
+  }
+  if (activeRouteMarkers.length > 0 && map) {
+    activeRouteMarkers.forEach(m => map.removeLayer(m));
+    activeRouteMarkers = [];
+  }
+}
+
+window.clearActiveRoute = function() {
+  if (confirm("確認結束並從地圖上清除此路線展示？（已儲存之行程與打卡狀態依然完整保留）")) {
+    clearRouteLayersOnly();
+    activeNavItinerary = null;
+    document.getElementById("active-route-drawer")?.classList.add("hidden");
+  }
+};
+
+// 更新導航抽屜內容
+function updateRouteNavDrawer() {
+  const drawer = document.getElementById("active-route-drawer");
+  if (!drawer || !activeNavItinerary) return;
+
+  const stops = activeNavItinerary.templeIds.map(id => TEMPLES_DATA.find(x => x.id === id)).filter(Boolean);
+  if (activeRouteStopIndex >= stops.length) {
+    drawer.innerHTML = `
+      <div class="text-center p-3 space-y-2">
+        <h4 class="font-bold text-sm text-emerald-800 flex items-center justify-center gap-1.5">
+          🎉 恭喜！本趟朝聖路線已全數參拜圓滿！
+        </h4>
+        <p class="text-xs text-slate-500">已拜訪全數 ${stops.length} 間廟宇。</p>
+        <button onclick="clearActiveRoute()" class="px-4 py-2 bg-brand-600 text-white text-xs font-bold rounded-xl shadow">結束路線</button>
+      </div>
+    `;
+    drawer.classList.remove("hidden");
+    return;
+  }
+
+  drawer.classList.remove("hidden");
+  const curStop = stops[activeRouteStopIndex];
+
+  document.getElementById("drawer-route-title").textContent = activeNavItinerary.name;
+  document.getElementById("drawer-step-index").textContent = `下一站（第 ${activeRouteStopIndex + 1} / ${stops.length} 站）`;
+  document.getElementById("drawer-current-name").textContent = curStop.name;
+
+  const prevCoords = activeRouteStopIndex === 0
+    ? activeNavItinerary.startPoint
+    : stops[activeRouteStopIndex - 1];
+  const dist = calculateHaversineKm(prevCoords.lat, prevCoords.lon, curStop.lat, curStop.lon);
+  document.getElementById("drawer-current-dist").textContent = `距離前站約 ${dist.toFixed(1)} 公里 (${curStop.county}${curStop.district})`;
+
+  const navStopBtn = document.getElementById("drawer-btn-nav-stop");
+  if (navStopBtn) {
+    navStopBtn.href = `https://www.google.com/maps/dir/?api=1&destination=${curStop.lat},${curStop.lon}`;
+  }
+
+  const navMultiBtn = document.getElementById("drawer-btn-nav-multi");
+  if (navMultiBtn) {
+    const origin = `${activeNavItinerary.startPoint.lat},${activeNavItinerary.startPoint.lon}`;
+    const dest = `${stops[stops.length - 1].lat},${stops[stops.length - 1].lon}`;
+    const waypoints = stops.slice(0, -1).map(t => `${t.lat},${t.lon}`).join("|");
+    navMultiBtn.href = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(dest)}&waypoints=${encodeURIComponent(waypoints)}`;
+  }
+
+  renderDrawerStopsList(stops);
+  if (window.lucide) lucide.createIcons();
+}
+
+function renderDrawerStopsList(stops) {
+  const listEl = document.getElementById("drawer-stops-list");
+  if (!listEl) return;
+  listEl.innerHTML = stops.map((t, idx) => {
+    const isPast = idx < activeRouteStopIndex;
+    const isCurrent = idx === activeRouteStopIndex;
+    return `
+      <div class="flex items-center justify-between p-1.5 rounded-lg ${isCurrent ? 'bg-amber-100/70 font-bold' : isPast ? 'opacity-50' : ''}">
+        <div class="flex items-center gap-2">
+          <span class="w-4 h-4 rounded-full ${isPast ? 'bg-emerald-500' : isCurrent ? 'bg-amber-500' : 'bg-slate-300'} text-white text-[10px] flex items-center justify-center font-bold">
+            ${isPast ? '✓' : idx + 1}
+          </span>
+          <span class="line-clamp-1">${escapeHtml(t.name)}</span>
+        </div>
+        <a href="https://www.google.com/maps/dir/?api=1&destination=${t.lat},${t.lon}" target="_blank" class="text-sky-600 text-[11px] font-bold hover:underline">導航</a>
+      </div>
+    `;
+  }).join("");
+}
+
+window.toggleRouteDrawerList = function() {
+  const el = document.getElementById("drawer-stops-list");
+  if (el) el.classList.toggle("hidden");
+};
+
+// 打卡當前站點
+window.checkinCurrentStop = function() {
+  if (!activeNavItinerary) return;
+  const stops = activeNavItinerary.templeIds.map(id => TEMPLES_DATA.find(x => x.id === id)).filter(Boolean);
+  const curStop = stops[activeRouteStopIndex];
+  if (curStop) {
+    openTempleModal(curStop.id);
+  }
+};
+
+// 已存行程管理
+async function updateSavedItinerariesCount() {
+  try {
+    const count = await db.itineraries.count();
+    const countBadge = document.getElementById("saved-itin-count");
+    if (countBadge) countBadge.textContent = count;
+  } catch (e) {
+    console.warn("無法取得已存行程數量:", e);
+  }
+}
+
+window.openSavedItinerariesModal = async function() {
+  const modal = document.getElementById("saved-itineraries-modal");
+  const container = document.getElementById("saved-itineraries-list");
+  if (!modal || !container) return;
+
+  try {
+    const itineraries = await db.itineraries.orderBy("createdAt").reverse().toArray();
+    if (itineraries.length === 0) {
+      container.innerHTML = '<p class="text-center text-slate-400 py-8 text-xs">目前尚未儲存任何規劃行程。可在規劃器運算後點擊「儲存」！</p>';
+    } else {
+      container.innerHTML = itineraries.map(itin => {
+        const stopsCount = itin.templeIds.length;
+        const dateStr = itin.createdAt ? new Date(itin.createdAt).toLocaleDateString("zh-TW") : "";
+        return `
+          <div class="p-4 bg-slate-50 hover:bg-white rounded-2xl border border-slate-200 shadow-sm transition space-y-2.5">
+            <div class="flex items-start justify-between gap-2">
+              <div>
+                <strong class="text-sm font-bold text-slate-800">${escapeHtml(itin.name)}</strong>
+                <p class="text-[11px] text-slate-400">建立時間：${dateStr}・共 ${stopsCount} 間廟宇</p>
+              </div>
+              <button onclick="deleteSavedItinerary('${itin.id}')" class="text-rose-500 hover:text-rose-700 text-xs p-1" title="刪除行程">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+              </button>
+            </div>
+            <div class="flex gap-2 pt-1">
+              <button onclick="loadSavedItinerary('${itin.id}')" class="flex-1 py-1.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center justify-center gap-1">
+                <i data-lucide="map" class="w-3.5 h-3.5"></i> 載入地圖導航
+              </button>
+            </div>
+          </div>
+        `;
+      }).join("");
+      if (window.lucide) lucide.createIcons();
+    }
+  } catch (err) {
+    container.innerHTML = `<p class="text-rose-500 text-xs py-4">讀取行程異常：${err.message}</p>`;
+  }
+
+  modal.classList.remove("hidden");
+};
+
+window.closeSavedItinerariesModal = function() {
+  document.getElementById("saved-itineraries-modal")?.classList.add("hidden");
+};
+
+window.loadSavedItinerary = async function(id) {
+  const itin = await db.itineraries.get(id);
+  if (!itin) return;
+  closeSavedItinerariesModal();
+  activateRouteOnMap(itin);
+  switchView("map");
+};
+
+window.deleteSavedItinerary = async function(id) {
+  if (confirm("確認刪除此已存行程？")) {
+    await db.itineraries.delete(id);
+    if (currentUser && fbDb) {
+      fbDb.collection("users").doc(currentUser.uid).collection("itineraries").doc(id).delete().catch(console.warn);
+    }
+    updateSavedItinerariesCount();
+    openSavedItinerariesModal();
+  }
+};
+
+// 增補廟宇至目前行程
+window.openAddTempleToRouteModal = function() {
+  const modal = document.getElementById("add-temple-to-route-modal");
+  const input = document.getElementById("add-temple-search-input");
+  if (input) input.value = "";
+  filterAddTempleList("");
+  if (modal) modal.classList.remove("hidden");
+};
+
+window.closeAddTempleToRouteModal = function() {
+  document.getElementById("add-temple-to-route-modal")?.classList.add("hidden");
+};
+
+window.filterAddTempleList = function(keyword) {
+  const container = document.getElementById("add-temple-results-list");
+  if (!container) return;
+
+  const q = keyword.trim().toLowerCase();
+  const existingIds = new Set(plannerCalculatedRoute.map(t => t.id));
+
+  const candidates = TEMPLES_DATA.filter(t => {
+    if (existingIds.has(t.id)) return false;
+    if (!t.lat || !t.lon) return false;
+    if (!q) return t.county === plannerCurrentCounty;
+    return t.name.toLowerCase().includes(q) ||
+           t.district.toLowerCase().includes(q) ||
+           (t.address && t.address.toLowerCase().includes(q));
+  }).slice(0, 30);
+
+  if (candidates.length === 0) {
+    container.innerHTML = '<p class="text-center text-slate-400 py-6 text-xs">查無符合關鍵字的未加入廟宇</p>';
+    return;
+  }
+
+  container.innerHTML = candidates.map(t => `
+    <div class="flex items-center justify-between p-2.5 bg-slate-50 hover:bg-white rounded-xl border border-slate-200 text-xs transition">
+      <div>
+        <strong class="text-slate-800 font-bold">${escapeHtml(t.name)}</strong>
+        <p class="text-[11px] text-slate-500">${escapeHtml(t.county)} ${escapeHtml(t.district)}</p>
+      </div>
+      <button onclick="addTempleToCalculatedRoute('${t.id}')" class="px-3 py-1 bg-brand-600 hover:bg-brand-500 text-white rounded-lg font-bold text-xs shadow-sm transition">
+        ＋ 加入
+      </button>
+    </div>
+  `).join("");
+};
+
+window.addTempleToCalculatedRoute = function(templeId) {
+  const t = TEMPLES_DATA.find(x => x.id === templeId);
+  if (!t) return;
+  plannerCalculatedRoute.push(t);
+  renderRouteStops();
+  closeAddTempleToRouteModal();
+};
