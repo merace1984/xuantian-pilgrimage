@@ -274,37 +274,122 @@
     <!-- View: Dashboard View -->
     <section id="view-dashboard" class="hidden flex-1 overflow-y-auto p-4 md:p-8 bg-slate-100">
       <div class="max-w-4xl mx-auto space-y-6">
-        <div>
-          <h2 class="font-bold text-2xl text-slate-800">朝聖進度總覽</h2>
-          <p class="text-sm text-slate-500 mt-1">追蹤全台與各縣市玄天上帝廟的踏查足跡</p>
-        </div>
-
-        <div class="bg-gradient-to-br from-brand-600 to-brand-500 rounded-3xl p-6 md:p-8 text-white shadow-xl relative overflow-hidden">
-          <div class="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-            <div class="space-y-2">
-              <span class="text-xs tracking-wider uppercase bg-brand-gold/30 text-amber-200 border border-brand-gold/40 px-3 py-1 rounded-full">全台總進度</span>
-              <div class="flex items-baseline gap-3">
-                <span id="dash-visited-big" class="text-5xl font-black tracking-tight text-white">0</span>
-                <span class="text-xl text-slate-300">/ 732 間</span>
-              </div>
-              <p class="text-sm text-slate-300">已踏查全台 <span id="dash-percent-big" class="font-bold text-amber-300">0.0%</span> 的玄帝宮廟</p>
-            </div>
-            <div class="w-full md:w-64 bg-white/10 rounded-2xl p-4 backdrop-blur border border-white/20 text-center">
-              <div class="text-xs text-slate-300">台南市大本營達成率</div>
-              <div class="text-3xl font-extrabold text-amber-300 mt-1" id="dash-tainan-ratio">0 / 96</div>
-              <div class="w-full bg-black/20 h-2.5 rounded-full mt-3 overflow-hidden">
-                <div id="dash-tainan-bar" class="bg-brand-gold h-full rounded-full transition-all duration-500" style="width: 0%"></div>
-              </div>
-            </div>
+        <!-- 頂部標題與統計範疇切換 -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 class="font-bold text-2xl text-slate-800">朝聖進度總覽</h2>
+            <p class="text-sm text-slate-500 mt-1">追蹤全台與各縣市玄天上帝廟的踏查足跡</p>
+          </div>
+          <!-- 範圍切換下拉選單 -->
+          <div class="flex items-center gap-2">
+            <label for="dash-scope-select" class="text-xs font-bold text-slate-600 shrink-0">統計範圍：</label>
+            <select id="dash-scope-select" class="text-xs md:text-sm p-2 md:p-2.5 px-3 rounded-xl border border-slate-300 bg-white font-bold text-slate-800 shadow-sm focus:outline-none focus:border-brand-500">
+              <option value="all">全台灣 (732 間整體統計)</option>
+            </select>
           </div>
         </div>
 
+        <!-- 快捷縣市切換標籤列 -->
+        <div class="flex items-center gap-1.5 overflow-x-auto py-1 text-xs">
+          <span class="text-slate-400 shrink-0">快捷切換：</span>
+          <div id="dash-quick-chips" class="flex items-center gap-1.5 overflow-x-auto"></div>
+        </div>
+
+        <!-- 焦點統計橫幅 (支援全台或任意指定縣市動態切換) -->
+        <div class="bg-gradient-to-br from-brand-600 to-brand-500 rounded-3xl p-6 md:p-8 text-white shadow-xl relative overflow-hidden">
+          <div class="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div class="space-y-3">
+              <div class="flex items-center gap-2">
+                <span id="dash-spotlight-tag" class="text-xs tracking-wider font-bold uppercase bg-brand-gold/30 text-amber-200 border border-brand-gold/40 px-3 py-1 rounded-full">全台總進度</span>
+                <span id="dash-spotlight-subtag" class="text-xs text-brand-100 hidden sm:inline">整體宮廟 732 間</span>
+              </div>
+              <div class="flex items-baseline gap-3">
+                <span id="dash-spotlight-visited" class="text-5xl font-black tracking-tight text-white">0</span>
+                <span id="dash-spotlight-total" class="text-xl text-slate-200">/ 732 間</span>
+              </div>
+              <p class="text-sm text-slate-200">
+                已踏查 <span id="dash-spotlight-scope-name" class="font-bold text-white">全台</span> 
+                <span id="dash-spotlight-percent" class="font-black text-amber-300 text-base">0.0%</span> 的玄帝宮廟
+              </p>
+              <!-- 快捷跳轉按鈕 -->
+              <div class="pt-1 flex items-center gap-2">
+                <button id="dash-btn-view-list" class="px-3 py-1.5 bg-white/20 hover:bg-white/30 backdrop-blur rounded-xl text-xs font-bold text-white transition flex items-center gap-1">
+                  <span>查看宮廟名錄</span>
+                  <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+                </button>
+                <button id="dash-btn-view-map" class="px-3 py-1.5 bg-brand-gold/30 hover:bg-brand-gold/40 text-amber-200 border border-brand-gold/40 rounded-xl text-xs font-bold transition flex items-center gap-1">
+                  <span>電子地圖檢視</span>
+                  <i data-lucide="map-pin" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- 右側達成率指標與三態分布卡片 -->
+            <div class="w-full md:w-72 bg-white/10 rounded-2xl p-4 backdrop-blur border border-white/20">
+              <div class="flex items-center justify-between text-xs text-slate-200">
+                <span id="dash-spotlight-card-title">達成率指標</span>
+                <span id="dash-spotlight-ratio" class="font-extrabold text-amber-300 text-sm">0 / 732</span>
+              </div>
+              <div class="w-full bg-black/25 h-3 rounded-full mt-2.5 overflow-hidden p-0.5">
+                <div id="dash-spotlight-bar" class="bg-brand-gold h-full rounded-full transition-all duration-500" style="width: 0%"></div>
+              </div>
+              <!-- 狀態細分 -->
+              <div class="grid grid-cols-3 gap-1.5 mt-4 pt-3 border-t border-white/10 text-center">
+                <div class="bg-white/10 rounded-lg p-1.5">
+                  <div class="text-[10px] text-emerald-300 font-bold">🟢 已參拜</div>
+                  <div id="dash-stat-visited" class="text-sm font-black text-white mt-0.5">0</div>
+                </div>
+                <div class="bg-white/10 rounded-lg p-1.5">
+                  <div class="text-[10px] text-amber-300 font-bold">🟡 規劃中</div>
+                  <div id="dash-stat-planned" class="text-sm font-black text-white mt-0.5">0</div>
+                </div>
+                <div class="bg-white/10 rounded-lg p-1.5">
+                  <div class="text-[10px] text-slate-300 font-bold">⚪ 未參拜</div>
+                  <div id="dash-stat-unvisited" class="text-sm font-black text-white mt-0.5">732</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- 隱藏向後相容元素，確保相容舊有腳本 -->
+          <div class="hidden">
+            <span id="dash-visited-big">0</span>
+            <span id="dash-percent-big">0.0%</span>
+            <span id="dash-tainan-ratio">0 / 96</span>
+            <div id="dash-tainan-bar" style="width: 0%"></div>
+          </div>
+        </div>
+
+        <!-- 轄內各鄉鎮市區完成度分佈 (當選取特定縣市時呈現) -->
+        <div id="dash-district-section" class="hidden bg-white rounded-3xl p-6 shadow-sm border border-slate-200 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="font-bold text-base md:text-lg text-slate-800 flex items-center gap-2">
+              <i data-lucide="map" class="w-5 h-5 text-brand-600"></i>
+              <span id="dash-district-title">鄉鎮市區轄內進度</span>
+            </h3>
+            <span id="dash-district-count-badge" class="text-xs font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">共 0 區</span>
+          </div>
+          <div id="dash-district-list" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3"></div>
+        </div>
+
+        <!-- 各縣市參拜完成度一覽 (22 縣市比較與排序) -->
         <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 space-y-4">
-          <h3 class="font-bold text-lg text-slate-800 flex items-center gap-2">
-            <i data-lucide="bar-chart-2" class="w-5 h-5 text-brand-600"></i>
-            各縣市參拜完成度
-          </h3>
-          <div id="county-progress-list" class="space-y-3"></div>
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+            <h3 class="font-bold text-base md:text-lg text-slate-800 flex items-center gap-2">
+              <i data-lucide="bar-chart-2" class="w-5 h-5 text-brand-600"></i>
+              各縣市參拜完成度一覽
+              <span class="text-xs font-normal text-slate-400">(共 22 縣市)</span>
+            </h3>
+            <div class="flex items-center gap-2">
+              <label for="dash-sort-select" class="text-xs text-slate-500 shrink-0">排序：</label>
+              <select id="dash-sort-select" class="text-xs p-1.5 px-2.5 rounded-lg border border-slate-200 bg-slate-50 font-medium text-slate-700 focus:outline-none focus:border-brand-500">
+                <option value="total-desc">依宮廟總數 (多到少)</option>
+                <option value="percent-desc">依達成率 (高到低)</option>
+                <option value="visited-desc">依已參拜數 (多到少)</option>
+                <option value="name-asc">依縣市筆畫名稱</option>
+              </select>
+            </div>
+          </div>
+          <div id="county-progress-list" class="grid grid-cols-1 md:grid-cols-2 gap-3.5"></div>
         </div>
       </div>
     </section>

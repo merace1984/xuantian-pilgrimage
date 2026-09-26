@@ -939,51 +939,348 @@ function renderListView() {
   if (window.lucide) lucide.createIcons();
 }
 
-function renderDashboardView() {
-  const visitedTemples = Object.values(userRecordsMap).filter(r => r.status === "visited");
-  const totalVisited = visitedTemples.length;
-  const percent = ((totalVisited / TEMPLES_DATA.length) * 100).toFixed(1);
+// === 儀表板全域狀態與控制 ===
+let currentDashboardScope = "all"; // "all" 或縣市名稱 (如 "臺南市")
+let currentDashboardSort = "total-desc"; // "total-desc", "percent-desc", "visited-desc", "name-asc"
 
-  document.getElementById("dash-visited-big").textContent = totalVisited;
-  document.getElementById("dash-percent-big").textContent = `${percent}%`;
+// 切換統計範圍 (全台或指定縣市)
+window.setDashboardScope = function(scope) {
+  currentDashboardScope = scope;
+  const select = document.getElementById("dash-scope-select");
+  if (select && select.value !== scope) {
+    select.value = scope;
+  }
+  renderDashboardView();
+};
 
-  const tainanTotal = 96;
-  const tainanVisited = visitedTemples.filter(r => {
-    const t = TEMPLES_DATA.find(x => x.id === r.templeId);
-    return t && t.county === "臺南市";
-  }).length;
-  const tainanPercent = Math.round((tainanVisited / tainanTotal) * 100);
+// 儀表板控制元件初始化
+function initDashboardControls() {
+  const scopeSelect = document.getElementById("dash-scope-select");
+  if (scopeSelect && scopeSelect.options.length <= 1) {
+    const countyCounts = {};
+    TEMPLES_DATA.forEach(t => {
+      countyCounts[t.county] = (countyCounts[t.county] || 0) + 1;
+    });
+    const sorted = Object.entries(countyCounts).sort((a, b) => b[1] - a[1]);
 
-  document.getElementById("dash-tainan-ratio").textContent = `${tainanVisited} / ${tainanTotal}`;
-  document.getElementById("dash-tainan-bar").style.width = `${tainanPercent}%`;
+    sorted.forEach(([cName, count]) => {
+      const opt = document.createElement("option");
+      opt.value = cName;
+      opt.textContent = `${cName} (${count} 間)`;
+      scopeSelect.appendChild(opt);
+    });
 
-  const countyStats = {};
-  TEMPLES_DATA.forEach(t => {
-    if (!countyStats[t.county]) countyStats[t.county] = { total: 0, visited: 0 };
-    countyStats[t.county].total++;
-    if (userRecordsMap[t.id]?.status === "visited") {
-      countyStats[t.county].visited++;
-    }
-  });
+    scopeSelect.addEventListener("change", (e) => {
+      window.setDashboardScope(e.target.value);
+    });
+  }
 
-  const sortedCounties = Object.entries(countyStats).sort((a, b) => b[1].total - a[1].total);
-  const container = document.getElementById("county-progress-list");
+  const sortSelect = document.getElementById("dash-sort-select");
+  if (sortSelect) {
+    sortSelect.value = currentDashboardSort;
+    sortSelect.onchange = (e) => {
+      currentDashboardSort = e.target.value;
+      renderDashboardCountyList();
+    };
+  }
+
+  const btnList = document.getElementById("dash-btn-view-list");
+  if (btnList) {
+    btnList.onclick = window.jumpToCountyList;
+  }
+  const btnMap = document.getElementById("dash-btn-view-map");
+  if (btnMap) {
+    btnMap.onclick = window.jumpToCountyMap;
+  }
+}
+
+// 快速跳轉至名錄 (支援目前所選縣市)
+window.jumpToCountyList = function() {
+  const targetCounty = currentDashboardScope === "all" ? "" : currentDashboardScope;
+  window.quickFilterList(targetCounty);
+  switchView("list");
+};
+
+// 快速跳轉至地圖
+window.jumpToCountyMap = function() {
+  if (currentDashboardScope !== "all") {
+    window.switchCounty(currentDashboardScope);
+  }
+  switchView("map");
+};
+
+// 快速跳轉至指定鄉鎮區的名錄
+window.jumpToDistrictList = function(county, district) {
+  const countySelect = document.getElementById("list-filter-county");
+  if (countySelect) {
+    countySelect.value = county;
+    updateListDistrictSelect(county);
+    const distSelect = document.getElementById("list-filter-district");
+    if (distSelect) distSelect.value = district;
+    renderListView();
+  }
+  switchView("list");
+};
+
+// 渲染快捷切換標籤列
+function renderDashboardChips() {
+  const container = document.getElementById("dash-quick-chips");
   if (!container) return;
 
-  container.innerHTML = sortedCounties.map(([c, stat]) => {
-    const p = Math.round((stat.visited / stat.total) * 100);
+  const topCounties = ["all", "臺南市", "高雄市", "雲林縣", "嘉義縣", "彰化縣", "屏東縣", "南投縣", "新北市", "臺中市"];
+  const countyCounts = { all: TEMPLES_DATA.length };
+  TEMPLES_DATA.forEach(t => {
+    countyCounts[t.county] = (countyCounts[t.county] || 0) + 1;
+  });
+
+  container.innerHTML = topCounties.map(c => {
+    const isAll = c === "all";
+    const label = isAll ? "全台灣" : c;
+    const count = countyCounts[c] || 0;
+    const isActive = currentDashboardScope === c;
+
+    const baseClass = "px-3 py-1 rounded-xl font-bold transition text-xs shrink-0 cursor-pointer flex items-center gap-1.5 ";
+    const activeClass = isActive 
+      ? "bg-brand-600 text-white shadow-sm border border-brand-700 ring-2 ring-brand-300"
+      : "bg-white text-slate-700 hover:bg-slate-100 border border-slate-200";
+
     return `
-      <div class="space-y-1">
-        <div class="flex items-center justify-between text-xs">
-          <span class="font-bold text-slate-700">${escapeHtml(c)}</span>
-          <span class="text-slate-500">${stat.visited} / ${stat.total} 間 (${p}%)</span>
+      <button onclick="setDashboardScope('${c}')" class="${baseClass} ${activeClass}">
+        <span>${escapeHtml(label)}</span>
+        <span class="text-[10px] ${isActive ? 'text-amber-200' : 'text-slate-400'}">(${count})</span>
+      </button>
+    `;
+  }).join("");
+}
+
+// 渲染焦點核心卡片 (動態支援 全台 或 特定縣市)
+function renderDashboardSpotlight() {
+  const isAll = currentDashboardScope === "all";
+  const targetTemples = isAll ? TEMPLES_DATA : TEMPLES_DATA.filter(t => t.county === currentDashboardScope);
+  const total = targetTemples.length;
+
+  let visited = 0;
+  let planned = 0;
+  let unvisited = 0;
+
+  targetTemples.forEach(t => {
+    const s = userRecordsMap[t.id]?.status;
+    if (s === "visited") visited++;
+    else if (s === "planned") planned++;
+    else unvisited++;
+  });
+
+  const percent = total > 0 ? ((visited / total) * 100).toFixed(1) : "0.0";
+  const scopeName = isAll ? "全台" : currentDashboardScope;
+
+  // 更新標籤與標題
+  const tagEl = document.getElementById("dash-spotlight-tag");
+  const subtagEl = document.getElementById("dash-spotlight-subtag");
+  const scopeNameEl = document.getElementById("dash-spotlight-scope-name");
+  const visitedEl = document.getElementById("dash-spotlight-visited");
+  const totalEl = document.getElementById("dash-spotlight-total");
+  const percentEl = document.getElementById("dash-spotlight-percent");
+
+  if (tagEl) tagEl.textContent = isAll ? "全台總體進度" : `${currentDashboardScope} 轄區進度`;
+  if (subtagEl) subtagEl.textContent = isAll ? `全台 22 縣市・共 ${total} 間` : `轄內宮廟 ${total} 間`;
+  if (scopeNameEl) scopeNameEl.textContent = scopeName;
+  if (visitedEl) visitedEl.textContent = visited;
+  if (totalEl) totalEl.textContent = `/ ${total} 間`;
+  if (percentEl) percentEl.textContent = `${percent}%`;
+
+  // 更新右側進度條與指標
+  const cardTitle = document.getElementById("dash-spotlight-card-title");
+  const ratioEl = document.getElementById("dash-spotlight-ratio");
+  const barEl = document.getElementById("dash-spotlight-bar");
+  const statVisited = document.getElementById("dash-stat-visited");
+  const statPlanned = document.getElementById("dash-stat-planned");
+  const statUnvisited = document.getElementById("dash-stat-unvisited");
+
+  if (cardTitle) cardTitle.textContent = isAll ? "全台達成率指標" : `${currentDashboardScope} 達成率`;
+  if (ratioEl) ratioEl.textContent = `${visited} / ${total}`;
+  if (barEl) barEl.style.width = `${percent}%`;
+  if (statVisited) statVisited.textContent = visited;
+  if (statPlanned) statPlanned.textContent = planned;
+  if (statUnvisited) statUnvisited.textContent = unvisited;
+
+  // 按鈕文字更新
+  const btnList = document.getElementById("dash-btn-view-list");
+  if (btnList) {
+    const listSpan = btnList.querySelector("span");
+    if (listSpan) listSpan.textContent = isAll ? "查看全台名錄" : `查看 ${currentDashboardScope} 名錄`;
+  }
+  const btnMap = document.getElementById("dash-btn-view-map");
+  if (btnMap) {
+    const mapSpan = btnMap.querySelector("span");
+    if (mapSpan) mapSpan.textContent = isAll ? "全台地圖總覽" : `地圖聚焦 ${currentDashboardScope}`;
+  }
+
+  // 向後相容舊有元件
+  const oldVisitedBig = document.getElementById("dash-visited-big");
+  const oldPercentBig = document.getElementById("dash-percent-big");
+  const oldTainanRatio = document.getElementById("dash-tainan-ratio");
+  const oldTainanBar = document.getElementById("dash-tainan-bar");
+  if (oldVisitedBig) oldVisitedBig.textContent = visited;
+  if (oldPercentBig) oldPercentBig.textContent = `${percent}%`;
+  if (oldTainanRatio) {
+    const tainanTemples = TEMPLES_DATA.filter(t => t.county === "臺南市");
+    const tVisited = tainanTemples.filter(t => userRecordsMap[t.id]?.status === "visited").length;
+    oldTainanRatio.textContent = `${tVisited} / 96`;
+    if (oldTainanBar) oldTainanBar.style.width = `${Math.round((tVisited / 96) * 100)}%`;
+  }
+}
+
+// 渲染選定縣市的轄內各鄉鎮區進度細分
+function renderDashboardDistricts() {
+  const section = document.getElementById("dash-district-section");
+  const list = document.getElementById("dash-district-list");
+  if (!section || !list) return;
+
+  if (currentDashboardScope === "all") {
+    section.classList.add("hidden");
+    return;
+  }
+
+  section.classList.remove("hidden");
+  const titleEl = document.getElementById("dash-district-title");
+  const countBadge = document.getElementById("dash-district-count-badge");
+
+  const countyTemples = TEMPLES_DATA.filter(t => t.county === currentDashboardScope);
+  const distMap = {};
+  countyTemples.forEach(t => {
+    const d = t.district || "其他";
+    if (!distMap[d]) {
+      distMap[d] = { name: d, total: 0, visited: 0, planned: 0 };
+    }
+    distMap[d].total++;
+    const s = userRecordsMap[t.id]?.status;
+    if (s === "visited") distMap[d].visited++;
+    else if (s === "planned") distMap[d].planned++;
+  });
+
+  const districts = Object.values(distMap).sort((a, b) => b.total - a.total);
+
+  if (titleEl) titleEl.textContent = `${currentDashboardScope} 各鄉鎮市區完成度`;
+  if (countBadge) countBadge.textContent = `共 ${districts.length} 個行政區`;
+
+  list.innerHTML = districts.map(d => {
+    const p = Math.round((d.visited / d.total) * 100);
+    return `
+      <div onclick="jumpToDistrictList('${escapeHtml(currentDashboardScope)}', '${escapeHtml(d.name)}')" 
+           class="p-3.5 bg-slate-50 hover:bg-white rounded-2xl border border-slate-200 hover:border-brand-300 hover:shadow-md transition group cursor-pointer">
+        <div class="flex items-center justify-between">
+          <div class="font-bold text-slate-800 text-sm group-hover:text-brand-600 transition flex items-center gap-1.5">
+            <span>${escapeHtml(d.name)}</span>
+            <i data-lucide="chevron-right" class="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition text-brand-600"></i>
+          </div>
+          <span class="text-xs font-black ${p > 0 ? 'text-brand-600' : 'text-slate-400'}">${p}%</span>
         </div>
-        <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+        <div class="w-full bg-slate-200 h-2 rounded-full mt-2.5 overflow-hidden">
           <div class="bg-brand-600 h-full rounded-full transition-all duration-300" style="width: ${p}%"></div>
+        </div>
+        <div class="flex items-center justify-between text-[11px] text-slate-500 mt-2.5 pt-1 border-t border-slate-100/60">
+          <span class="font-medium">${d.visited} / ${d.total} 間</span>
+          <div class="flex items-center gap-1.5 text-[10px]">
+            <span class="text-emerald-700 font-bold">🟢 ${d.visited}</span>
+            ${d.planned > 0 ? `<span class="text-amber-700 font-bold">🟡 ${d.planned}</span>` : ''}
+          </div>
         </div>
       </div>
     `;
   }).join("");
+}
+
+// 渲染各縣市參拜完成度列表 (22 縣市比較與排序)
+function renderDashboardCountyList() {
+  const container = document.getElementById("county-progress-list");
+  if (!container) return;
+
+  const countyStats = {};
+  TEMPLES_DATA.forEach(t => {
+    if (!countyStats[t.county]) {
+      countyStats[t.county] = { county: t.county, total: 0, visited: 0, planned: 0, unvisited: 0 };
+    }
+    const stat = countyStats[t.county];
+    stat.total++;
+    const s = userRecordsMap[t.id]?.status;
+    if (s === "visited") stat.visited++;
+    else if (s === "planned") stat.planned++;
+    else stat.unvisited++;
+  });
+
+  const list = Object.values(countyStats);
+
+  // 排序
+  list.sort((a, b) => {
+    if (currentDashboardSort === "percent-desc") {
+      const pA = a.total > 0 ? a.visited / a.total : 0;
+      const pB = b.total > 0 ? b.visited / b.total : 0;
+      if (pB !== pA) return pB - pA;
+      return b.total - a.total;
+    } else if (currentDashboardSort === "visited-desc") {
+      if (b.visited !== a.visited) return b.visited - a.visited;
+      return b.total - a.total;
+    } else if (currentDashboardSort === "name-asc") {
+      return a.county.localeCompare(b.county, "zh-Hant");
+    } else {
+      // total-desc (預設)
+      return b.total - a.total;
+    }
+  });
+
+  container.innerHTML = list.map(stat => {
+    const p = Math.round((stat.visited / stat.total) * 100);
+    const isSelected = currentDashboardScope === stat.county;
+
+    const cardClass = isSelected
+      ? "bg-brand-50/60 border-brand-400 ring-2 ring-brand-400 shadow-sm"
+      : "bg-slate-50 hover:bg-white border-slate-200 hover:border-brand-200 hover:shadow-sm";
+
+    return `
+      <div onclick="setDashboardScope('${escapeHtml(stat.county)}')" 
+           class="p-4 rounded-2xl border transition cursor-pointer group space-y-2.5 ${cardClass}">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="font-extrabold text-sm text-slate-800 group-hover:text-brand-700 transition flex items-center gap-1">
+              ${escapeHtml(stat.county)}
+              ${isSelected ? '<span class="text-[10px] bg-brand-600 text-white px-1.5 py-0.5 rounded font-medium">焦點</span>' : ''}
+            </span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-black ${p > 0 ? 'text-brand-600' : 'text-slate-400'}">${p}%</span>
+            <button onclick="event.stopPropagation(); quickFilterList('${escapeHtml(stat.county)}'); switchView('list');" 
+                    title="在廟宇名錄中查看"
+                    class="text-[11px] text-slate-400 hover:text-brand-600 px-1.5 py-0.5 rounded hover:bg-slate-100 transition">
+              名錄 ↗
+            </button>
+          </div>
+        </div>
+
+        <div class="w-full bg-slate-200/80 h-2.5 rounded-full overflow-hidden">
+          <div class="bg-brand-600 h-full rounded-full transition-all duration-300" style="width: ${p}%"></div>
+        </div>
+
+        <div class="flex items-center justify-between text-xs text-slate-500 pt-1">
+          <span class="font-medium text-slate-600">${stat.visited} / ${stat.total} 間</span>
+          <div class="flex items-center gap-2 text-[11px]">
+            <span class="text-emerald-700 font-semibold">🟢 ${stat.visited}</span>
+            <span class="text-amber-700 font-semibold">🟡 ${stat.planned}</span>
+            <span class="text-slate-400 font-medium">⚪ ${stat.unvisited}</span>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+// 渲染儀表板主要視圖
+function renderDashboardView() {
+  initDashboardControls();
+  renderDashboardChips();
+  renderDashboardSpotlight();
+  renderDashboardDistricts();
+  renderDashboardCountyList();
+  if (window.lucide) lucide.createIcons();
 }
 
 function renderTimelineView() {
@@ -1066,6 +1363,9 @@ function renderAllViews() {
   if (headerPercent) headerPercent.textContent = `${percent}%`;
 
   renderMapMarkers();
+  renderListView();
+  renderDashboardView();
+  renderTimelineView();
 }
 
 // === 10. 事件監聽綁定 ===
