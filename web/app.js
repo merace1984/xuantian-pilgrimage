@@ -70,6 +70,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // 4. 初始化 Firebase 雲端引擎
   initFirebaseEngine();
+
+  // 5. 初始化 Google Analytics 4 流量追蹤
+  initGoogleAnalytics();
 });
 
 window.addEventListener("load", () => {
@@ -113,6 +116,84 @@ async function loadUserDataFromLocal() {
     });
   } catch (err) {
     console.error("載入本地 IndexedDB 失敗:", err);
+  }
+}
+
+// =========================================================================
+// === 4.5 Google Analytics 4 (GA4) 流量統計與事件追蹤模組 ===
+// =========================================================================
+let gaInitialized = false;
+
+function initGoogleAnalytics() {
+  const measurementId = window.GA_MEASUREMENT_ID || 
+                        window.FIREBASE_CONFIG?.measurementId;
+
+  if (!measurementId || measurementId.trim() === "" || measurementId.includes("...")) {
+    return;
+  }
+
+  try {
+    // 1. 動態非同步載入 gtag.js
+    const script = document.createElement("script");
+    script.async = true;
+    script.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(measurementId)}`;
+    document.head.appendChild(script);
+
+    // 2. 初始化 dataLayer
+    window.dataLayer = window.dataLayer || [];
+    window.gtag = function() {
+      window.dataLayer.push(arguments);
+    };
+    window.gtag("js", new Date());
+
+    // 3. 配置 GA4 參數 (若在本地端，加入除錯標記)
+    const isLocal = window.location.hostname === "localhost" || 
+                    window.location.hostname === "127.0.0.1" || 
+                    window.location.protocol === "file:";
+
+    window.gtag("config", measurementId, {
+      send_page_view: false, // 改由 SPA 手動精準發送 virtual page view
+      debug_mode: isLocal
+    });
+
+    gaInitialized = true;
+    trackGAPageView("map");
+  } catch (err) {
+    console.warn("GA4 初始化異常:", err);
+  }
+}
+
+function trackGAPageView(viewName) {
+  const titles = {
+    map: "朝聖地圖",
+    list: "廟宇名冊",
+    planner: "智能路線規劃",
+    dashboard: "參拜統計儀表板",
+    timeline: "朝聖時間軸",
+    settings: "系統設定與備份"
+  };
+  const title = titles[viewName] || viewName;
+  const path = `/#view-${viewName}`;
+
+  if (window.gtag && gaInitialized) {
+    window.gtag("event", "page_view", {
+      page_title: `參拜足跡 - ${title}`,
+      page_path: path,
+      page_location: window.location.origin + window.location.pathname + path
+    });
+  }
+
+  if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+    console.debug(`[GA4 PageView] ${viewName} (${title}) -> ${path}`);
+  }
+}
+
+function trackGAEvent(eventName, params = {}) {
+  if (window.gtag && gaInitialized) {
+    window.gtag("event", eventName, params);
+  }
+  if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+    console.debug(`[GA4 Event] ${eventName}`, params);
   }
 }
 
@@ -341,6 +422,7 @@ async function loginWithGoogle() {
     currentUser = result.user;
     updateAuthUI(currentUser);
     setupUserDataSync(currentUser);
+    trackGAEvent("login", { method: "Google" });
     alert("🎉 登入成功！已驗證管理員身分，開啟設定與編輯權限。");
   } catch (err) {
     console.error("Google 登入失敗:", err);
@@ -368,6 +450,7 @@ async function logoutGoogle() {
     await fbAuth.signOut();
     currentUser = null;
     updateAuthUI(null);
+    trackGAEvent("logout", {});
     alert("已登出 Google 帳號。目前切換為訪客唯讀狀態。");
   }
 }
@@ -657,6 +740,9 @@ window.switchView = function(viewName) {
     }
   });
 
+  // 發送 GA4 虛擬頁面瀏覽 (Virtual Page View)
+  trackGAPageView(viewName);
+
   if (viewName === "map") {
     setTimeout(() => {
       if (map) map.invalidateSize();
@@ -678,6 +764,14 @@ window.openTempleModal = async function(templeId) {
   if (!t) return;
 
   currentActiveTemple = t;
+
+  // 發送 GA4 廟宇詳情檢視事件
+  trackGAEvent("temple_detail_view", {
+    temple_id: t.id,
+    temple_name: t.name,
+    county: t.county,
+    district: t.district
+  });
   const record = userRecordsMap[templeId] || {
     status: "unvisited",
     visitDate: "",
@@ -979,6 +1073,17 @@ async function saveCurrentRecord() {
       }
       updateRouteNavDrawer();
     }
+
+    // 發送 GA4 參拜打卡紀錄事件
+    trackGAEvent("pilgrimage_checkin", {
+      temple_id: tid,
+      temple_name: currentActiveTemple.name,
+      county: currentActiveTemple.county,
+      district: currentActiveTemple.district,
+      status: status,
+      has_notes: !!notes,
+      photos_count: finalPhotoUrls.length
+    });
 
     document.getElementById("temple-modal").classList.add("hidden");
     renderAllViews();
@@ -2110,6 +2215,12 @@ window.calculateOptimizedRoute = function() {
 
   renderRouteStops();
 
+  // 發送 GA4 路線規劃事件
+  trackGAEvent("route_planned", {
+    county: plannerCurrentCounty,
+    stops_count: plannerCalculatedRoute.length
+  });
+
   // 切換至結果卡片
   document.getElementById("planner-config-card")?.classList.add("hidden");
   document.getElementById("planner-result-card")?.classList.remove("hidden");
@@ -2297,6 +2408,12 @@ window.saveAndActivateRoute = async function() {
 
   updateSavedItinerariesCount();
   renderAllViews();
+
+  // 發送 GA4 行程儲存事件
+  trackGAEvent("route_saved", {
+    route_name: routeName,
+    stops_count: plannerCalculatedRoute.length
+  });
 
   // 3. 在地圖上展示並啟動導航抽屜
   activateRouteOnMap(itinerary);

@@ -21,8 +21,12 @@ window.FIREBASE_CONFIG = {
   projectId: "YOUR_PROJECT_ID",
   storageBucket: "YOUR_PROJECT_ID.appspot.com",
   messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  appId: "YOUR_APP_ID",
+  measurementId: "" // Google Analytics 4 評估 ID (例如: G-XXXXXXXXXX，選填)
 };
+
+// 亦可在此獨立指定全域 GA 評估 ID (若未使用 Firebase Analytics)
+window.GA_MEASUREMENT_ID = "";
 
 /**
  * 檢查 Firebase 是否已完成實質設定
