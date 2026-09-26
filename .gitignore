@@ -1,0 +1,28 @@
+# 系統與 IDE 快取
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/
+
+# 暫存腳本與工作目錄
+scratch/
+.system_generated/
+__pycache__/
+*.pyc
+*.bat
+*.cmd
+
+# 本地備份檔
+*.tmp
+*.bak
+
+# 個人私密與在地行程規劃檔案（僅留地端，永不上傳）
+*行程*
+*路線*
+*規劃*
+*機車*
+*當日往返*
+private/
+personal/
+itinerary/

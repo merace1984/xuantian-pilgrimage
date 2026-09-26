@@ -1,0 +1,40 @@
+name: Deploy XuanTian Pilgrimage to GitHub Pages
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+# 設定 GitHub Token 權限以允許部署至 GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同一時間只允許一個部署任務執行，避免競爭
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          # 將 web/ 目錄打包為靜態網站根目錄
+          path: './web'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
