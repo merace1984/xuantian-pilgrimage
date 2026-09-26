@@ -446,6 +446,8 @@ async function loginWithGoogle() {
       alert("⚠️ 登入視窗被瀏覽器封鎖，請允許本網站開啟彈出式視窗後重試。");
     } else if (err.code === "auth/unauthorized-domain") {
       alert("⚠️ 授權網域未設定：當前網站網域尚未加入 Firebase Authentication 授權網域白名單。\n\n請至 Firebase Console > Authentication > Settings > Authorized Domains 新增目前網址（如 localhost 或 GitHub Pages 網址）。");
+    } else if (err.code === "auth/configuration-not-found" || err.message?.includes("configuration-not-found")) {
+      alert("⚠️ 登入提供者尚未啟用：Firebase 後台尚未開啟「Google 登入」。\n\n請前往 Firebase Console > Authentication > Sign-in method，點選「Google」切換為「啟用」，選取專案支援電子郵件並點擊「儲存」，即可立即生效！");
     } else {
       alert("登入失敗: " + err.message);
     }
