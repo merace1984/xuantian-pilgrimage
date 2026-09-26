@@ -29,6 +29,17 @@ jobs:
       - name: Setup GitHub Pages
         uses: actions/configure-pages@v5
 
+      - name: Inject Firebase Config (if configured in Secrets)
+        env:
+          FIREBASE_CONFIG_SECRET: ${{ secrets.FIREBASE_CONFIG_JS }}
+        run: |
+          if [ -n "$FIREBASE_CONFIG_SECRET" ]; then
+            echo "Injecting Firebase config from GitHub Secret..."
+            echo "$FIREBASE_CONFIG_SECRET" > ./web/firebase-config.js
+          else
+            echo "No FIREBASE_CONFIG_JS secret found, using placeholder default."
+          fi
+
       - name: Upload Artifact
         uses: actions/upload-pages-artifact@v3
         with:

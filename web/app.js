@@ -41,6 +41,8 @@ let fbDb = null;
 let fbStorage = null;
 let fbAuth = null;
 let currentUser = null;
+let itinerariesUnsubscribe = null;
+let userRecordsUnsubscribe = null;
 
 // === 3. 頁面載入啟動 ===
 document.addEventListener("DOMContentLoaded", async () => {
@@ -158,6 +160,7 @@ function initFirebaseEngine() {
     fbAuth.onAuthStateChanged((user) => {
       currentUser = user;
       updateAuthUI(user);
+      setupUserDataSync(user);
     });
 
     // 監聽 Firestore 即時快訊 (Real-time Snapshot)
@@ -218,6 +221,73 @@ function setCloudStatus(state, text) {
   if (statusText) statusText.textContent = text;
 }
 
+// 使用者個人資料與規劃路線之雲端雙向即時同步
+function setupUserDataSync(user) {
+  if (itinerariesUnsubscribe) {
+    try { itinerariesUnsubscribe(); } catch (_) {}
+    itinerariesUnsubscribe = null;
+  }
+  if (userRecordsUnsubscribe) {
+    try { userRecordsUnsubscribe(); } catch (_) {}
+    userRecordsUnsubscribe = null;
+  }
+
+  if (!user || !fbDb) return;
+
+  // 1. 雙向同步使用者個人規劃路線 (Itineraries)
+  try {
+    itinerariesUnsubscribe = fbDb.collection("users").doc(user.uid).collection("itineraries")
+      .onSnapshot((snapshot) => {
+        snapshot.docChanges().forEach(async (change) => {
+          const itin = change.doc.data();
+          const id = change.doc.id;
+          if (change.type === "added" || change.type === "modified") {
+            await db.itineraries.put({ ...itin, id });
+          } else if (change.type === "removed") {
+            await db.itineraries.delete(id);
+          }
+        });
+        updateSavedItinerariesCount();
+      }, (err) => {
+        console.warn("行程同步監聽提醒:", err);
+      });
+  } catch (err) {
+    console.warn("初始化行程監聽失敗:", err);
+  }
+
+  // 2. 雙向同步使用者個人打卡與筆記 (Records)
+  try {
+    userRecordsUnsubscribe = fbDb.collection("users").doc(user.uid).collection("records")
+      .onSnapshot((snapshot) => {
+        snapshot.docChanges().forEach(async (change) => {
+          const rec = change.doc.data();
+          const tid = change.doc.id;
+          if (change.type === "added" || change.type === "modified") {
+            userRecordsMap[tid] = rec;
+            await db.records.put(rec);
+            if (rec.photos && Array.isArray(rec.photos)) {
+              templePhotosMap[tid] = rec.photos;
+              await db.photos.where("templeId").equals(tid).delete();
+              if (rec.photos.length > 0) {
+                await db.photos.bulkAdd(rec.photos);
+              }
+            }
+          } else if (change.type === "removed") {
+            delete userRecordsMap[tid];
+            delete templePhotosMap[tid];
+            await db.records.delete(tid);
+            await db.photos.where("templeId").equals(tid).delete();
+          }
+        });
+        renderAllViews();
+      }, (err) => {
+        console.warn("個人紀錄同步監聽提醒:", err);
+      });
+  } catch (err) {
+    console.warn("初始化紀錄監聽失敗:", err);
+  }
+}
+
 function updateAuthUI(user) {
   const btnLogin = document.getElementById("btn-login");
   const userProfile = document.getElementById("user-profile");
@@ -262,7 +332,7 @@ function updateAuthUI(user) {
 // Google 登入
 async function loginWithGoogle() {
   if (!window.isFirebaseConfigured || !window.isFirebaseConfigured()) {
-    alert("目前尚未設定 Firebase 雲端金鑰。\n\n請依照指引在 private/config/firebase-config.js 填入您的 Firebase 專案設定並上傳至網站根目錄，即可啟用 Google 帳號管理員驗證！");
+    alert("目前尚未設定 Firebase 雲端金鑰。\n\n請依照指引在 private/config/firebase-config.js 填入您的 Firebase 專案設定並重新啟動本地伺服器，或在 GitHub Secrets 設定，即可啟用 Google 帳號管理員驗證！");
     return;
   }
   const provider = new firebase.auth.GoogleAuthProvider();
@@ -270,16 +340,31 @@ async function loginWithGoogle() {
     const result = await fbAuth.signInWithPopup(provider);
     currentUser = result.user;
     updateAuthUI(currentUser);
+    setupUserDataSync(currentUser);
     alert("🎉 登入成功！已驗證管理員身分，開啟設定與編輯權限。");
   } catch (err) {
     console.error("Google 登入失敗:", err);
-    alert("登入失敗: " + err.message);
+    if (err.code === "auth/popup-blocked") {
+      alert("⚠️ 登入視窗被瀏覽器封鎖，請允許本網站開啟彈出式視窗後重試。");
+    } else if (err.code === "auth/unauthorized-domain") {
+      alert("⚠️ 授權網域未設定：當前網站網域尚未加入 Firebase Authentication 授權網域白名單。\n\n請至 Firebase Console > Authentication > Settings > Authorized Domains 新增目前網址（如 localhost 或 GitHub Pages 網址）。");
+    } else {
+      alert("登入失敗: " + err.message);
+    }
   }
 }
 
 // Google 登出
 async function logoutGoogle() {
   if (fbAuth) {
+    if (itinerariesUnsubscribe) {
+      try { itinerariesUnsubscribe(); } catch (_) {}
+      itinerariesUnsubscribe = null;
+    }
+    if (userRecordsUnsubscribe) {
+      try { userRecordsUnsubscribe(); } catch (_) {}
+      userRecordsUnsubscribe = null;
+    }
     await fbAuth.signOut();
     currentUser = null;
     updateAuthUI(null);
@@ -830,7 +915,7 @@ async function saveCurrentRecord() {
           const blob = dataURLtoBlob(p.dataUrl);
           const fileName = `photo_${Date.now()}_${i}.webp`;
           const storageRef = fbStorage.ref(`photos/${tid}/${fileName}`);
-          await storageRef.put(blob);
+          await storageRef.put(blob, { contentType: blob.type || "image/webp" });
           const downloadUrl = await storageRef.getDownloadURL();
           finalPhotoUrls.push({
             templeId: tid,
@@ -876,9 +961,12 @@ async function saveCurrentRecord() {
       delete templePhotosMap[tid];
     }
 
-    // 2. 寫入 Firebase Firestore (雲端同步)
+    // 2. 寫入 Firebase Firestore (雲端雙向同步)
     if (fbDb && currentUser) {
       setCloudStatus("syncing", "雲端同步中...");
+      // 同步至個人專屬紀錄庫
+      await fbDb.collection("users").doc(currentUser.uid).collection("records").doc(tid).set(record, { merge: true });
+      // 鏡像至全域公開展示展示層
       await fbDb.collection("pilgrimages").doc(tid).set(record, { merge: true });
       setCloudStatus("online", "雲端已連線");
     }
@@ -921,9 +1009,10 @@ async function deleteCurrentRecord() {
     delete userRecordsMap[tid];
     delete templePhotosMap[tid];
 
-    // 刪除雲端
+    // 刪除雲端 (同時刪除個人專屬紀錄與全域展示層鏡像)
     if (fbDb && currentUser) {
-      await fbDb.collection("pilgrimages").doc(tid).delete();
+      await fbDb.collection("users").doc(currentUser.uid).collection("records").doc(tid).delete().catch(console.warn);
+      await fbDb.collection("pilgrimages").doc(tid).delete().catch(console.warn);
     }
 
     document.getElementById("temple-modal").classList.add("hidden");
@@ -2185,6 +2274,7 @@ window.saveAndActivateRoute = async function() {
 
       if (currentUser && fbDb) {
         fbDb.collection("users").doc(currentUser.uid).collection("records").doc(t.id).set(rec, { merge: true }).catch(console.warn);
+        fbDb.collection("pilgrimages").doc(t.id).set(rec, { merge: true }).catch(console.warn);
       }
     }
   }

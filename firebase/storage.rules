@@ -1,19 +1,23 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
+    // 1. 公開參拜相片路徑 (支援全域廟宇照片)
     match /photos/{templeId}/{photoName} {
-      // 1. 公開所有人皆可查看參拜相片
       allow read: if true;
-
-      // 2. 只有通過登入驗證的使用者才能上傳照片
-      // 嚴格限制單檔大小 < 2MB (前端 WebP 壓縮通常僅 200KB，防止惡意佔用容量)
-      // 嚴格限制檔案格式僅限安全圖檔 (WebP/JPEG/PNG)，杜絕上傳惡意腳本或可執行檔
       allow write: if request.auth != null
-                    && request.resource.size < 2 * 1024 * 1024
+                    && request.resource.size < 5 * 1024 * 1024
                     && request.resource.contentType.matches('image/(webp|jpeg|png)');
-
-      // 3. 允許已驗證使用者刪除相片
       allow delete: if request.auth != null;
+    }
+
+    // 2. 個人專屬照片子路徑
+    match /photos/{userId}/{templeId}/{photoName} {
+      allow read: if true;
+      allow write: if request.auth != null
+                    && request.auth.uid == userId
+                    && request.resource.size < 5 * 1024 * 1024
+                    && request.resource.contentType.matches('image/(webp|jpeg|png)');
+      allow delete: if request.auth != null && request.auth.uid == userId;
     }
   }
 }

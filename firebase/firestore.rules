@@ -1,27 +1,58 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 參拜足跡紀錄集合
+    
+    // =========================================================================
+    // 1. 公開社群/展示展示層：全域參拜紀錄
+    // =========================================================================
     match /pilgrimages/{templeId} {
-      // 1. 公開唯讀瀏覽：所有人皆可檢視參拜成果與地圖
+      // 公開所有人皆可讀取，支援訪客離線快照與展示地圖
       allow read: if true;
 
-      // 2. 新增權限：必須為登入使用者、強制綁定 UID，並實施欄位格式與長度檢查
+      // 新增權限：需登入、強制綁定 UID，並實施欄位與長度校驗
       allow create: if request.auth != null
                     && request.resource.data.userId == request.auth.uid
                     && request.resource.data.status in ['visited', 'planned', 'unvisited']
                     && (!('notes' in request.resource.data) || (request.resource.data.notes is string && request.resource.data.notes.size() <= 5000));
 
-      // 3. 修改權限：僅限原始建立者（比對 UID），防止他人越權篡改或破壞 (BOLA 防護)
+      // 修改權限：僅限原建立者 (BOLA 防護)
       allow update: if request.auth != null
                     && (resource.data.userId == request.auth.uid || !('userId' in resource.data))
                     && request.resource.data.userId == request.auth.uid
                     && request.resource.data.status in ['visited', 'planned', 'unvisited']
                     && (!('notes' in request.resource.data) || (request.resource.data.notes is string && request.resource.data.notes.size() <= 5000));
 
-      // 4. 刪除權限：僅限原始建立者
+      // 刪除權限：僅限原建立者
       allow delete: if request.auth != null
                     && (resource.data.userId == request.auth.uid || !('userId' in resource.data));
+    }
+
+    // =========================================================================
+    // 2. 個人使用者私有空間 (跨裝置同步個人打卡與規劃路線)
+    // =========================================================================
+    match /users/{userId} {
+      // 個人基本資料僅允許本人讀寫
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+
+      // 使用者個人參拜打卡紀錄子集合
+      match /records/{templeId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow create, update: if request.auth != null && request.auth.uid == userId
+                              && request.resource.data.status in ['visited', 'planned', 'unvisited']
+                              && (!('notes' in request.resource.data) || (request.resource.data.notes is string && request.resource.data.notes.size() <= 5000));
+        allow delete: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // 使用者個人自訂規劃行程路線子集合
+      match /itineraries/{itineraryId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow create, update: if request.auth != null && request.auth.uid == userId
+                              && request.resource.data.name is string
+                              && request.resource.data.name.size() <= 100
+                              && request.resource.data.templeIds is list
+                              && request.resource.data.templeIds.size() <= 300;
+        allow delete: if request.auth != null && request.auth.uid == userId;
+      }
     }
   }
 }
