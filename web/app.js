@@ -2085,20 +2085,107 @@ window.geocodeCustomAddress = async function() {
     alert("請輸入起點地址或地標關鍵字");
     return;
   }
+
+  // 1. 優先本地比對全台 740 間玄天上帝廟資料庫 (0 毫秒極速且精準)
+  const qLower = query.toLowerCase();
+  const localMatch = TEMPLES_DATA.find(t => 
+    t.name.toLowerCase() === qLower || 
+    t.name.toLowerCase().includes(qLower) ||
+    (t.address && t.address.toLowerCase().includes(qLower))
+  );
+
+  // 若完全相符或關鍵字明確，直接採用本地資料庫座標
+  if (localMatch && (localMatch.name.toLowerCase() === qLower || qLower.length >= 3)) {
+    plannerStartPoint = { 
+      type: 'custom', 
+      name: `${localMatch.name} (${localMatch.county}${localMatch.district})`, 
+      lat: localMatch.lat, 
+      lon: localMatch.lon 
+    };
+    updatePlannerStartStatusUI();
+    alert(`已成功定位起點（宮廟資料庫）：「${localMatch.name}」(${localMatch.county}${localMatch.district})`);
+    return;
+  }
+
+  const btn = document.querySelector("#start-panel-custom button");
+  const origText = btn ? btn.textContent : "搜尋定位";
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "定位中...";
+  }
+
   try {
-    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`);
-    const data = await res.json();
-    if (data && data.length > 0) {
-      const lat = parseFloat(data[0].lat);
-      const lon = parseFloat(data[0].lon);
-      plannerStartPoint = { type: 'custom', name: query, lat, lon };
+    let found = false;
+
+    // 2. 呼叫支援全網 CORS 的 Photon (OpenStreetMap 台灣地理編碼引擎)
+    try {
+      const ctrl = new AbortController();
+      const timeoutId = setTimeout(() => ctrl.abort(), 6000);
+      const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=1`, {
+        signal: ctrl.signal
+      });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.features && data.features.length > 0) {
+          const coords = data.features[0].geometry.coordinates; // [lon, lat]
+          const lon = parseFloat(coords[0]);
+          const lat = parseFloat(coords[1]);
+          const placeName = data.features[0].properties.name || query;
+          plannerStartPoint = { type: 'custom', name: placeName, lat, lon };
+          updatePlannerStartStatusUI();
+          alert(`已成功定位起點：「${placeName}」`);
+          found = true;
+        }
+      }
+    } catch (_) {}
+
+    if (found) return;
+
+    // 3. 次選：備援呼叫 OpenStreetMap Nominatim 引擎
+    try {
+      const ctrl = new AbortController();
+      const timeoutId = setTimeout(() => ctrl.abort(), 6000);
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`, {
+        signal: ctrl.signal
+      });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.length > 0) {
+          const lat = parseFloat(data[0].lat);
+          const lon = parseFloat(data[0].lon);
+          plannerStartPoint = { type: 'custom', name: query, lat, lon };
+          updatePlannerStartStatusUI();
+          alert(`已成功定位起點：「${query}」`);
+          found = true;
+        }
+      }
+    } catch (_) {}
+
+    if (found) return;
+
+    // 4. 若外部查詢無結果但本地有部分模糊相符，採用本地符合之宮廟
+    if (localMatch) {
+      plannerStartPoint = { 
+        type: 'custom', 
+        name: `${localMatch.name} (${localMatch.county}${localMatch.district})`, 
+        lat: localMatch.lat, 
+        lon: localMatch.lon 
+      };
       updatePlannerStartStatusUI();
-      alert(`已定位起點：「${query}」`);
-    } else {
-      alert("查無此地標座標，請嘗試更精確的行政區或路名");
+      alert(`查無外部地圖精確坐標，已為您自動配對宮廟起點：「${localMatch.name}」(${localMatch.county}${localMatch.district})`);
+      return;
     }
+
+    alert("查無此地標座標，請嘗試更精確的行政區或路名（例如：台南火車站、台中高鐵站）");
   } catch (err) {
-    alert("搜尋定位連線逾時，請手動選擇廟宇或推薦快捷起點");
+    alert("搜尋定位連線異常，請嘗試選擇宮廟或點選推薦快捷起點");
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = origText;
+    }
   }
 };
 
