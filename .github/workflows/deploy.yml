@@ -45,7 +45,7 @@ jobs:
             echo "Injecting ADMIN_ALLOWED_EMAILS from GitHub Repository Secrets..."
             node -e '
               const raw = process.env.ADMIN_ALLOWED_EMAILS || "";
-              const emails = raw.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+              const emails = raw.split(/[\r\n,]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
               const fs = require("fs");
               const path = "./web/firebase-config.js";
               let content = fs.existsSync(path) ? fs.readFileSync(path, "utf8") : "";
