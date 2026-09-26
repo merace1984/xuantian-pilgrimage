@@ -1,5 +1,5 @@
 // =========================================================================
-// 玄帝足跡 核心應用邏輯 (app.js)
+// 參拜足跡 核心應用邏輯 (app.js)
 // 支援：IndexedDB 本機離線優先 + Firebase 雲端雙向即時同步
 // =========================================================================
 
@@ -1541,7 +1541,7 @@ function bindEvents() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `玄帝足跡參拜備份_${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `參拜足跡備份_${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
   });
