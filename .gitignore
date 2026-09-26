@@ -26,3 +26,8 @@ __pycache__/
 private/
 personal/
 itinerary/
+
+# 本地開發與預覽工具（僅留地端，永不上傳）
+local-server.js
+start-preview.*
+tools/
