@@ -32,16 +32,26 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (window.lucide) lucide.createIcons();
   updateAuthUI(null);
   
-  // 優先載入本地 IndexedDB 快取 (保證 0.1 秒秒開)
-  await loadUserDataFromLocal();
-  
-  // 初始化地圖與各視圖
-  initMap();
+  // 1. 優先同步填入各選單與綁定事件，確保任何狀況下下拉選單皆完整可用
   populateCountySelect();
   bindEvents();
+  
+  // 2. 載入本地 IndexedDB 快取 (保證 0.1 秒秒開)
+  try {
+    await loadUserDataFromLocal();
+  } catch (err) {
+    console.warn("載入本地 IndexedDB 快取異常:", err);
+  }
+  
+  // 3. 初始化地圖與各視圖
+  try {
+    initMap();
+  } catch (err) {
+    console.warn("地圖初始化異常:", err);
+  }
   renderAllViews();
 
-  // 初始化 Firebase 雲端引擎
+  // 4. 初始化 Firebase 雲端引擎
   initFirebaseEngine();
 });
 
@@ -437,8 +447,16 @@ function populateCountySelect() {
   const optionsHtml = '<option value="">全部縣市 (732)</option>' +
     sorted.map(([c, cnt]) => `<option value="${c}">${c} (${cnt})</option>`).join("");
 
-  if (mapSelect) mapSelect.innerHTML = optionsHtml;
-  if (listSelect) listSelect.innerHTML = optionsHtml;
+  if (mapSelect) {
+    const cur = mapSelect.value;
+    mapSelect.innerHTML = optionsHtml;
+    if (cur) mapSelect.value = cur;
+  }
+  if (listSelect) {
+    const cur = listSelect.value;
+    listSelect.innerHTML = optionsHtml;
+    if (cur) listSelect.value = cur;
+  }
 }
 
 function updateListDistrictSelect(selectedCounty) {
@@ -471,6 +489,9 @@ function updateListDistrictSelect(selectedCounty) {
 window.quickFilterList = function(countyName) {
   const countySelect = document.getElementById("list-filter-county");
   if (countySelect) {
+    if (countySelect.options.length <= 1) {
+      populateCountySelect();
+    }
     countySelect.value = countyName;
     updateListDistrictSelect(countyName);
     renderListView();
@@ -503,9 +524,14 @@ window.switchView = function(viewName) {
   });
 
   document.querySelectorAll(".nav-tab").forEach(tab => {
-    const isTarget = tab.getAttribute("onclick").includes(`'${viewName}'`);
-    tab.classList.toggle("text-brand-600", isTarget);
-    tab.classList.toggle("text-slate-500", !isTarget);
+    const isTarget = tab.getAttribute("onclick")?.includes(`'${viewName}'`);
+    if (isTarget) {
+      tab.classList.add("bg-amber-100/70", "text-brand-600", "font-bold");
+      tab.classList.remove("text-slate-500", "hover:bg-slate-50", "font-medium");
+    } else {
+      tab.classList.remove("bg-amber-100/70", "text-brand-600", "font-bold");
+      tab.classList.add("text-slate-500", "hover:bg-slate-50", "font-medium");
+    }
   });
 
   if (viewName === "map") {
@@ -865,7 +891,12 @@ function renderListView() {
   const container = document.getElementById("temple-list-container");
   if (!container) return;
 
-  const countyFilter = document.getElementById("list-filter-county")?.value || "";
+  const listCountyEl = document.getElementById("list-filter-county");
+  if (listCountyEl && listCountyEl.options.length <= 1) {
+    populateCountySelect();
+  }
+
+  const countyFilter = listCountyEl?.value || "";
   const districtFilter = document.getElementById("list-filter-district")?.value || "";
   const statusFilter = document.getElementById("list-filter-status")?.value || "all";
   const searchKey = document.getElementById("list-filter-search")?.value.trim().toLowerCase() || "";
