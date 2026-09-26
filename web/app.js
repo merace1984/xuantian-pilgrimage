@@ -373,6 +373,8 @@ function updateAuthUI(user) {
   const btnLogin = document.getElementById("btn-login");
   const userProfile = document.getElementById("user-profile");
   const userAvatar = document.getElementById("user-avatar");
+  const plannerLockedBox = document.getElementById("planner-locked-box");
+  const plannerContentBox = document.getElementById("planner-content-box");
   const settingsLockedBox = document.getElementById("settings-locked-box");
   const settingsContentBox = document.getElementById("settings-content-box");
   const settingsUserEmail = document.getElementById("settings-user-email");
@@ -385,6 +387,10 @@ function updateAuthUI(user) {
     }
     if (userAvatar) userAvatar.src = user.photoURL || "https://ui-avatars.com/api/?name=" + encodeURIComponent(user.displayName || "User");
     
+    // 路線規劃解鎖
+    if (plannerLockedBox) plannerLockedBox.classList.add("hidden");
+    if (plannerContentBox) plannerContentBox.classList.remove("hidden");
+
     // 設定頁解鎖
     if (settingsLockedBox) settingsLockedBox.classList.add("hidden");
     if (settingsContentBox) settingsContentBox.classList.remove("hidden");
@@ -396,9 +402,19 @@ function updateAuthUI(user) {
       userProfile.classList.remove("flex");
     }
     
+    // 路線規劃鎖定
+    if (plannerLockedBox) plannerLockedBox.classList.remove("hidden");
+    if (plannerContentBox) plannerContentBox.classList.add("hidden");
+
     // 設定頁鎖定
     if (settingsLockedBox) settingsLockedBox.classList.remove("hidden");
     if (settingsContentBox) settingsContentBox.classList.add("hidden");
+
+    // 若有活動中導航抽屜，登出時關閉並清理地圖路線折線
+    if (activeNavItinerary) {
+      closeRouteNavDrawer();
+      clearRouteLayersOnly();
+    }
   }
 
   // 若當前廟宇彈窗開啟中，即時重新套用權限模式
@@ -1773,11 +1789,13 @@ function bindEvents() {
     }
     const allRecords = await db.records.toArray();
     const allPhotos = await db.photos.toArray();
+    const allItineraries = await db.itineraries.toArray();
     const backupData = {
-      version: "2.0",
+      version: "2.1",
       exportDate: new Date().toISOString(),
       records: allRecords,
-      photos: allPhotos
+      photos: allPhotos,
+      itineraries: allItineraries
     };
 
     const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: "application/json" });
@@ -1804,11 +1822,15 @@ function bindEvents() {
         const backup = JSON.parse(evt.target.result);
         if (!backup.records) throw new Error("備份檔案格式不正確");
 
-        if (confirm(`確認匯入備份？包含 ${backup.records.length} 筆參拜紀錄及 ${backup.photos?.length || 0} 張相片。`)) {
+        const itinCount = backup.itineraries?.length || 0;
+        if (confirm(`確認匯入備份？包含 ${backup.records.length} 筆參拜紀錄、${backup.photos?.length || 0} 張相片與 ${itinCount} 條自訂行程。`)) {
           await db.records.clear();
           await db.photos.clear();
+          await db.itineraries.clear();
           if (backup.records.length) await db.records.bulkAdd(backup.records);
           if (backup.photos?.length) await db.photos.bulkAdd(backup.photos);
+          if (backup.itineraries?.length) await db.itineraries.bulkAdd(backup.itineraries);
+          updateSavedItinerariesCount();
           await loadUserDataFromLocal();
           renderAllViews();
           alert("備份還原成功！");
@@ -1826,11 +1848,13 @@ function bindEvents() {
       alert("權限不足：請先使用 Google 帳號登入後才能重設本機紀錄！");
       return;
     }
-    if (confirm("⚠️ 警告：這將會清除您在本機所有的暫存參拜打卡紀錄與相片，確認清除？")) {
+    if (confirm("⚠️ 警告：這將會清除您在本機所有的暫存參拜打卡紀錄、相片與自訂行程，確認清除？")) {
       await db.records.clear();
       await db.photos.clear();
+      await db.itineraries.clear();
       userRecordsMap = {};
       templePhotosMap = {};
+      updateSavedItinerariesCount();
       renderAllViews();
       alert("已重設本機紀錄");
     }
@@ -2170,6 +2194,12 @@ function updatePlannerRegionSummary() {
 
 // 開始計算最佳化路線
 window.calculateOptimizedRoute = function() {
+  if (!currentUser) {
+    alert("權限不足：智能路線規劃功能需要登入 Google 帳號才能使用！");
+    switchView("planner");
+    return;
+  }
+
   if (!plannerStartPoint) {
     alert("請先選擇出發起點（可使用 GPS 目前定位、指定廟宇或推薦快捷起點）");
     return;
@@ -2362,6 +2392,12 @@ function updateGoogleMultiNavUrl() {
 
 // 儲存並列入規劃中行程
 window.saveAndActivateRoute = async function() {
+  if (!currentUser) {
+    alert("權限不足：儲存路線並啟動導航需要登入 Google 帳號才能使用！");
+    switchView("planner");
+    return;
+  }
+
   if (!plannerStartPoint || plannerCalculatedRoute.length === 0) return;
 
   const routeName = document.getElementById("route-name-input")?.value.trim() || `${plannerCurrentCounty}朝聖行程`;
@@ -2603,6 +2639,12 @@ async function updateSavedItinerariesCount() {
 }
 
 window.openSavedItinerariesModal = async function() {
+  if (!currentUser) {
+    alert("權限不足：檢視已存行程清單需要登入 Google 帳號才能使用！");
+    switchView("planner");
+    return;
+  }
+
   const modal = document.getElementById("saved-itineraries-modal");
   const container = document.getElementById("saved-itineraries-list");
   if (!modal || !container) return;
@@ -2648,6 +2690,10 @@ window.closeSavedItinerariesModal = function() {
 };
 
 window.loadSavedItinerary = async function(id) {
+  if (!currentUser) {
+    alert("權限不足：載入行程導航需要登入 Google 帳號才能使用！");
+    return;
+  }
   const itin = await db.itineraries.get(id);
   if (!itin) return;
   closeSavedItinerariesModal();
