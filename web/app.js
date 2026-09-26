@@ -404,33 +404,50 @@ function renderMapMarkers() {
     const icon = createPinIcon(status);
     const marker = L.marker([t.lat, t.lon], { icon });
 
-    const statusLabel = status === "visited" ? '<span class="text-emerald-700 bg-emerald-100 font-bold px-1.5 py-0.5 rounded text-[10px]">🟢 已參拜</span>' :
-                        status === "planned" ? '<span class="text-amber-700 bg-amber-100 font-bold px-1.5 py-0.5 rounded text-[10px]">🟡 規劃中</span>' :
-                        '<span class="text-slate-600 bg-slate-100 font-bold px-1.5 py-0.5 rounded text-[10px]">⚪ 未參拜</span>';
+    const statusLabel = status === "visited" ? '<span class="inline-flex items-center gap-1 text-emerald-700 bg-emerald-100 font-bold px-2 py-0.5 rounded-full text-[11px]">🟢 已參拜</span>' :
+                        status === "planned" ? '<span class="inline-flex items-center gap-1 text-amber-700 bg-amber-100 font-bold px-2 py-0.5 rounded-full text-[11px]">🟡 規劃中</span>' :
+                        '<span class="inline-flex items-center gap-1 text-slate-600 bg-slate-100 font-bold px-2 py-0.5 rounded-full text-[11px]">⚪ 未參拜</span>';
 
     const popupHtml = `
-      <div class="text-xs p-1 space-y-2 font-sans w-[260px] sm:w-[280px]">
-        <div class="flex items-start justify-between gap-2 pr-6">
-          <strong class="text-sm font-bold text-slate-800 leading-snug">${escapeHtml(t.name)}</strong>
-          <span class="shrink-0 mt-0.5">${statusLabel}</span>
+      <div class="text-xs space-y-2.5 font-sans w-[280px] sm:w-[310px] select-text">
+        <!-- 頂部標題列：廟名享有完整空間，右側預留 pr-8 避讓關閉按鈕 -->
+        <div class="pr-8">
+          <strong class="text-[15px] font-bold text-slate-900 leading-snug tracking-tight block">${escapeHtml(t.name)}</strong>
         </div>
-        <div class="space-y-0.5">
-          <p class="text-slate-500 font-medium text-[11px]">${escapeHtml(t.county)} ${escapeHtml(t.district)}</p>
-          <p class="text-[11px] text-slate-400 break-words leading-relaxed">${escapeHtml(t.address || "無詳細地址")}</p>
+
+        <!-- 狀態與縣市行政區列：徹底垂直分離於關閉按鈕下方，完全避免重疊與誤觸 -->
+        <div class="flex items-center gap-2 flex-wrap">
+          ${statusLabel}
+          <span class="text-slate-500 font-medium text-xs flex items-center gap-1">
+            <span class="w-1 h-1 rounded-full bg-slate-300"></span>
+            ${escapeHtml(t.county)} ${escapeHtml(t.district)}
+          </span>
         </div>
-        <div class="flex gap-2 pt-1.5">
+
+        <!-- 地址欄位：卡片化淺底色與圖示襯托，完整清晰折行 -->
+        <div class="text-[12px] text-slate-600 leading-relaxed break-words bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-100 flex items-start gap-1.5">
+          <span class="shrink-0 text-slate-400 mt-0.5">📍</span>
+          <span>${escapeHtml(t.address || "無詳細地址紀錄")}</span>
+        </div>
+
+        <!-- 操作按鈕列：擴大觸控面積與圓角質感 -->
+        <div class="flex gap-2 pt-1">
           <a href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(t.lat)},${encodeURIComponent(t.lon)}" target="_blank"
-             class="flex-1 text-center py-1.5 bg-sky-500 hover:bg-sky-600 active:scale-95 text-white rounded-lg font-bold text-xs shadow-sm transition">導航</a>
+             class="flex-1 text-center py-2 bg-sky-500 hover:bg-sky-600 active:scale-95 text-white rounded-xl font-bold text-xs shadow-sm transition flex items-center justify-center gap-1">
+            <span>導航</span>
+          </a>
           <button onclick="openTempleModal('${escapeHtml(t.id)}')"
-             class="flex-1 py-1.5 bg-brand-600 hover:bg-brand-500 active:scale-95 text-white rounded-lg font-bold text-xs shadow-sm transition">打卡記事</button>
+             class="flex-1 py-2 bg-brand-600 hover:bg-brand-500 active:scale-95 text-white rounded-xl font-bold text-xs shadow-sm transition flex items-center justify-center gap-1">
+            <span>打卡記事</span>
+          </button>
         </div>
       </div>
     `;
 
     marker.bindPopup(popupHtml, {
-      minWidth: 260,
-      maxWidth: 320,
-      autoPanPadding: [25, 25]
+      minWidth: 280,
+      maxWidth: 350,
+      autoPanPadding: [30, 30]
     });
     markersCluster.addLayer(marker);
     markersMap[t.id] = marker;
