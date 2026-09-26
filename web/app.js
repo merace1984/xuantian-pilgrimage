@@ -409,23 +409,29 @@ function renderMapMarkers() {
                         '<span class="text-slate-600 bg-slate-100 font-bold px-1.5 py-0.5 rounded text-[10px]">⚪ 未參拜</span>';
 
     const popupHtml = `
-      <div class="text-xs p-1 space-y-1.5 font-sans min-w-[190px]">
-        <div class="flex items-center justify-between gap-1">
-          <strong class="text-sm font-bold text-slate-800">${escapeHtml(t.name)}</strong>
-          ${statusLabel}
+      <div class="text-xs p-1 space-y-2 font-sans w-[260px] sm:w-[280px]">
+        <div class="flex items-start justify-between gap-2 pr-6">
+          <strong class="text-sm font-bold text-slate-800 leading-snug">${escapeHtml(t.name)}</strong>
+          <span class="shrink-0 mt-0.5">${statusLabel}</span>
         </div>
-        <p class="text-slate-500">${escapeHtml(t.county)}${escapeHtml(t.district)}</p>
-        <p class="text-[11px] text-slate-400 line-clamp-1">${escapeHtml(t.address || "無詳細地址")}</p>
-        <div class="flex gap-1.5 pt-1">
+        <div class="space-y-0.5">
+          <p class="text-slate-500 font-medium text-[11px]">${escapeHtml(t.county)} ${escapeHtml(t.district)}</p>
+          <p class="text-[11px] text-slate-400 break-words leading-relaxed">${escapeHtml(t.address || "無詳細地址")}</p>
+        </div>
+        <div class="flex gap-2 pt-1.5">
           <a href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(t.lat)},${encodeURIComponent(t.lon)}" target="_blank"
-             class="flex-1 text-center py-1 bg-sky-500 hover:bg-sky-600 text-white rounded font-bold text-[11px]">導航</a>
+             class="flex-1 text-center py-1.5 bg-sky-500 hover:bg-sky-600 active:scale-95 text-white rounded-lg font-bold text-xs shadow-sm transition">導航</a>
           <button onclick="openTempleModal('${escapeHtml(t.id)}')"
-             class="flex-1 py-1 bg-brand-600 hover:bg-brand-500 text-white rounded font-bold text-[11px]">打卡記事</button>
+             class="flex-1 py-1.5 bg-brand-600 hover:bg-brand-500 active:scale-95 text-white rounded-lg font-bold text-xs shadow-sm transition">打卡記事</button>
         </div>
       </div>
     `;
 
-    marker.bindPopup(popupHtml);
+    marker.bindPopup(popupHtml, {
+      minWidth: 260,
+      maxWidth: 320,
+      autoPanPadding: [25, 25]
+    });
     markersCluster.addLayer(marker);
     markersMap[t.id] = marker;
   });
