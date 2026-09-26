@@ -3,55 +3,48 @@ service cloud.firestore {
   match /databases/{database}/documents {
     
     // =========================================================================
-    // 1. 公開社群/展示展示層：全域參拜紀錄
+    // 0. 授權 Email 白名單檢驗
     // =========================================================================
-    match /pilgrimages/{templeId} {
-      // 公開所有人皆可讀取，支援訪客離線快照與展示地圖
-      allow read: if true;
-
-      // 新增權限：需登入、強制綁定 UID，並實施欄位與長度校驗
-      allow create: if request.auth != null
-                    && request.resource.data.userId == request.auth.uid
-                    && request.resource.data.status in ['visited', 'planned', 'unvisited']
-                    && (!('notes' in request.resource.data) || (request.resource.data.notes is string && request.resource.data.notes.size() <= 5000));
-
-      // 修改權限：僅限原建立者 (BOLA 防護)
-      allow update: if request.auth != null
-                    && (resource.data.userId == request.auth.uid || !('userId' in resource.data))
-                    && request.resource.data.userId == request.auth.uid
-                    && request.resource.data.status in ['visited', 'planned', 'unvisited']
-                    && (!('notes' in request.resource.data) || (request.resource.data.notes is string && request.resource.data.notes.size() <= 5000));
-
-      // 刪除權限：僅限原建立者
-      allow delete: if request.auth != null
-                    && (resource.data.userId == request.auth.uid || !('userId' in resource.data));
+    function isAllowedUser() {
+      return request.auth != null && 
+             request.auth.token.email in [
+               // 部署至 Firebase 後台時，請在此填入您的授權管理員 Google 信箱
+               'YOUR_ADMIN_EMAIL@gmail.com'
+               // , 'partner@gmail.com'
+             ];
     }
 
     // =========================================================================
-    // 2. 個人使用者私有空間 (跨裝置同步個人打卡與規劃路線)
+    // 1. 公開展示層：全域參拜紀錄
+    // =========================================================================
+    match /pilgrimages/{templeId} {
+      // 訪客公開讀取（支援地圖與廟宇名冊瀏覽）
+      allow read: if true;
+
+      // 寫入/更新/刪除：嚴格限制為白名單授權帳號
+      allow create, update, delete: if isAllowedUser();
+    }
+
+    // =========================================================================
+    // 2. 個人使用者私有空間 (個人紀錄、路線與備份)
     // =========================================================================
     match /users/{userId} {
-      // 個人基本資料僅允許本人讀寫
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      // 僅允許符合白名單且為本人 UID 之帳號存取
+      allow read, write: if isAllowedUser() && request.auth.uid == userId;
 
-      // 使用者個人參拜打卡紀錄子集合
+      // 個人參拜打卡紀錄子集合
       match /records/{templeId} {
-        allow read: if request.auth != null && request.auth.uid == userId;
-        allow create, update: if request.auth != null && request.auth.uid == userId
-                              && request.resource.data.status in ['visited', 'planned', 'unvisited']
-                              && (!('notes' in request.resource.data) || (request.resource.data.notes is string && request.resource.data.notes.size() <= 5000));
-        allow delete: if request.auth != null && request.auth.uid == userId;
+        allow read, write: if isAllowedUser() && request.auth.uid == userId;
       }
 
-      // 使用者個人自訂規劃行程路線子集合
+      // 個人規劃行程路線子集合
       match /itineraries/{itineraryId} {
-        allow read: if request.auth != null && request.auth.uid == userId;
-        allow create, update: if request.auth != null && request.auth.uid == userId
-                              && request.resource.data.name is string
-                              && request.resource.data.name.size() <= 100
-                              && request.resource.data.templeIds is list
-                              && request.resource.data.templeIds.size() <= 300;
-        allow delete: if request.auth != null && request.auth.uid == userId;
+        allow read, write: if isAllowedUser() && request.auth.uid == userId;
+      }
+
+      // 萬用子集合遞迴保護
+      match /{allChildren=**} {
+        allow read, write: if isAllowedUser() && request.auth.uid == userId;
       }
     }
   }

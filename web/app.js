@@ -44,6 +44,25 @@ let currentUser = null;
 let itinerariesUnsubscribe = null;
 let userRecordsUnsubscribe = null;
 
+// 讀取外部設定檔 (firebase-config.js) 注入之管理員白名單，避免將 Email 硬編碼於程式中
+function getAllowedAdminEmails() {
+  if (Array.isArray(window.ALLOWED_ADMIN_EMAILS)) {
+    return window.ALLOWED_ADMIN_EMAILS;
+  }
+  if (window.FIREBASE_CONFIG && Array.isArray(window.FIREBASE_CONFIG.allowedEmails)) {
+    return window.FIREBASE_CONFIG.allowedEmails;
+  }
+  return [];
+}
+
+function isEmailAllowed(email) {
+  const allowed = getAllowedAdminEmails();
+  // 若未設定白名單（例如本機未配置或公開訪客模式），則不進行前端信箱過濾
+  if (!allowed || allowed.length === 0) return true;
+  if (!email) return false;
+  return allowed.map(e => String(e).toLowerCase().trim()).includes(String(email).toLowerCase().trim());
+}
+
 // === 3. 頁面載入啟動 ===
 document.addEventListener("DOMContentLoaded", async () => {
   if (window.lucide) lucide.createIcons();
@@ -241,7 +260,15 @@ function initFirebaseEngine() {
     });
 
     // 監聽登入狀態
-    fbAuth.onAuthStateChanged((user) => {
+    fbAuth.onAuthStateChanged(async (user) => {
+      if (user && !isEmailAllowed(user.email)) {
+        console.warn("未授權帳號嘗試連線，系統自動登出:", user.email);
+        alert(`⚠️【存取權限提醒】\n帳號 (${user.email}) 尚未列於允許訪問名單中。\n\n系統已自動為您登出，如需授權請聯絡系統管理員。`);
+        try { await fbAuth.signOut(); } catch (_) {}
+        currentUser = null;
+        updateAuthUI(null);
+        return;
+      }
       currentUser = user;
       updateAuthUI(user);
       setupUserDataSync(user);
@@ -440,7 +467,15 @@ async function loginWithGoogle() {
   const provider = new firebase.auth.GoogleAuthProvider();
   try {
     const result = await fbAuth.signInWithPopup(provider);
-    currentUser = result.user;
+    const user = result.user;
+    if (!isEmailAllowed(user.email)) {
+      alert(`⚠️【存取權限提醒】\n帳號 (${user.email}) 尚未列於允許訪問名單中。\n\n系統已自動為您登出，如需授權請聯絡系統管理員。`);
+      try { await fbAuth.signOut(); } catch (_) {}
+      currentUser = null;
+      updateAuthUI(null);
+      return;
+    }
+    currentUser = user;
     updateAuthUI(currentUser);
     setupUserDataSync(currentUser);
     trackGAEvent("login", { method: "Google" });
@@ -2154,6 +2189,29 @@ window.selectAllDistrictsInCurrentCounty = function() {
   updatePlannerRegionSummary();
 };
 
+window.deselectAllDistrictsInCurrentCounty = function() {
+  const countyTemples = TEMPLES_DATA.filter(t => t.county === plannerCurrentCounty && t.district);
+  countyTemples.forEach(t => {
+    plannerSelectedDistricts.delete(`${plannerCurrentCounty}:${t.district}`);
+  });
+  renderDistrictChipsForCounty(plannerCurrentCounty);
+  updatePlannerRegionSummary();
+};
+
+window.toggleAllDistrictsInCurrentCounty = function() {
+  const countyTemples = TEMPLES_DATA.filter(t => t.county === plannerCurrentCounty && t.district);
+  const distSet = new Set(countyTemples.map(t => t.district));
+  const allSelected = Array.from(distSet).every(d => plannerSelectedDistricts.has(`${plannerCurrentCounty}:${d}`));
+
+  if (allSelected) {
+    distSet.forEach(d => plannerSelectedDistricts.delete(`${plannerCurrentCounty}:${d}`));
+  } else {
+    distSet.forEach(d => plannerSelectedDistricts.add(`${plannerCurrentCounty}:${d}`));
+  }
+  renderDistrictChipsForCounty(plannerCurrentCounty);
+  updatePlannerRegionSummary();
+};
+
 window.clearAllSelectedDistricts = function() {
   plannerSelectedDistricts.clear();
   renderDistrictChipsForCounty(plannerCurrentCounty);
@@ -2186,12 +2244,22 @@ function updatePlannerRegionSummary() {
     } else {
       summaryBox.classList.remove("hidden");
       const list = Array.from(plannerSelectedDistricts);
-      summaryBox.innerHTML = list.map(item => {
+      summaryBox.innerHTML = `
+        <div class="w-full flex items-center justify-between pb-1.5 mb-1 border-b border-amber-200/70 text-[11px] text-amber-900 font-bold">
+          <span>已選取 ${list.length} 個行政區</span>
+          <button type="button" onclick="clearAllSelectedDistricts()" class="text-rose-600 hover:text-rose-700 hover:underline flex items-center gap-1 font-bold cursor-pointer transition">
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            <span>清空所有已選</span>
+          </button>
+        </div>
+      ` + list.map(item => {
         const [c, d] = item.split(":");
         return `
           <span class="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-100/80 text-amber-800 rounded-md text-xs font-semibold">
             ${c} ${d}
-            <button type="button" onclick="toggleDistrictSelection('${c}', '${d}')" class="hover:text-rose-600 font-black">×</button>
+            <button type="button" onclick="toggleDistrictSelection('${c}', '${d}')" class="hover:text-rose-600 font-black cursor-pointer">×</button>
           </span>
         `;
       }).join("");

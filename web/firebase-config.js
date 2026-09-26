@@ -28,6 +28,9 @@ window.FIREBASE_CONFIG = {
 // 亦可在此獨立指定全域 GA 評估 ID (若未使用 Firebase Analytics)
 window.GA_MEASUREMENT_ID = "";
 
+// 授權管理員 Email 白名單（請在 private/config/firebase-config.js 填入，或透過 GitHub Secret: ADMIN_ALLOWED_EMAILS 自動注入）
+window.ALLOWED_ADMIN_EMAILS = [];
+
 /**
  * 檢查 Firebase 是否已完成實質設定
  * 若未設定，系統自動無縫降級為瀏覽器本機 IndexedDB 快取模式

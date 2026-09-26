@@ -29,15 +29,32 @@ jobs:
       - name: Setup GitHub Pages
         uses: actions/configure-pages@v5
 
-      - name: Inject Firebase Config (if configured in Secrets)
+      - name: Inject Secrets & Config (Firebase & Admin Email Allowlist)
         env:
           FIREBASE_CONFIG_SECRET: ${{ secrets.FIREBASE_CONFIG_JS }}
+          ADMIN_ALLOWED_EMAILS: ${{ secrets.ADMIN_ALLOWED_EMAILS }}
         run: |
           if [ -n "$FIREBASE_CONFIG_SECRET" ]; then
-            echo "Injecting Firebase config from GitHub Secret..."
+            echo "Injecting Firebase config from GitHub Secret FIREBASE_CONFIG_JS..."
             echo "$FIREBASE_CONFIG_SECRET" > ./web/firebase-config.js
           else
-            echo "No FIREBASE_CONFIG_JS secret found, using placeholder default."
+            echo "No FIREBASE_CONFIG_JS secret found, using repository template."
+          fi
+
+          if [ -n "$ADMIN_ALLOWED_EMAILS" ]; then
+            echo "Injecting ADMIN_ALLOWED_EMAILS from GitHub Repository Secrets..."
+            node -e '
+              const raw = process.env.ADMIN_ALLOWED_EMAILS || "";
+              const emails = raw.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+              const fs = require("fs");
+              const path = "./web/firebase-config.js";
+              let content = fs.existsSync(path) ? fs.readFileSync(path, "utf8") : "";
+              content += "\n// Injected from GitHub Repository Secret: ADMIN_ALLOWED_EMAILS\nwindow.ALLOWED_ADMIN_EMAILS = " + JSON.stringify(emails) + ";\n";
+              fs.writeFileSync(path, content, "utf8");
+              console.log("Successfully injected " + emails.length + " admin email(s) into firebase-config.js");
+            '
+          else
+            echo "No ADMIN_ALLOWED_EMAILS secret found in repository."
           fi
 
       - name: Upload Artifact
