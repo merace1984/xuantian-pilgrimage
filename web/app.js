@@ -544,9 +544,12 @@ function initMap() {
     center: [23.5, 120.8],
     zoom: 8,
     layers: [googleStreet],
-    zoomControl: true,
+    zoomControl: false,
     scrollWheelZoom: true
   });
+
+  // 將縮放控制項移至右下角 (bottomright)，徹底避開左上角搜尋與篩選面板
+  L.control.zoom({ position: "bottomright" }).addTo(map);
 
   const baseLayers = {
     "Google 街道圖 (推薦)": googleStreet,
