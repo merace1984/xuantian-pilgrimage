@@ -114,6 +114,9 @@ async function loadUserDataFromLocal() {
       if (!templePhotosMap[p.templeId]) templePhotosMap[p.templeId] = [];
       templePhotosMap[p.templeId].push(p);
     });
+
+    // 自動校準「規劃中」廟宇狀態與已存行程之一致性
+    await reconcilePlannedStatus();
   } catch (err) {
     console.error("載入本地 IndexedDB 失敗:", err);
   }
@@ -329,6 +332,7 @@ function setupUserDataSync(user) {
           }
         });
         updateSavedItinerariesCount();
+        reconcilePlannedStatus();
       }, (err) => {
         console.warn("行程同步監聽提醒:", err);
       });
@@ -361,6 +365,7 @@ function setupUserDataSync(user) {
           }
         });
         renderAllViews();
+        reconcilePlannedStatus();
       }, (err) => {
         console.warn("個人紀錄同步監聽提醒:", err);
       });
@@ -2629,6 +2634,64 @@ window.checkinCurrentStop = function() {
   }
 };
 
+// 自動校準「規劃中 (planned)」廟宇狀態與已存行程之一致性
+async function reconcilePlannedStatus() {
+  try {
+    const allItineraries = await db.itineraries.toArray();
+    const activePlannedTempleIds = new Set();
+    allItineraries.forEach(itin => {
+      if (Array.isArray(itin.templeIds)) {
+        itin.templeIds.forEach(tid => activePlannedTempleIds.add(tid));
+      }
+    });
+
+    let changed = false;
+    const templesToRevert = [];
+
+    for (const tid in userRecordsMap) {
+      const rec = userRecordsMap[tid];
+      if (rec && rec.status === "planned") {
+        if (!activePlannedTempleIds.has(tid)) {
+          templesToRevert.push(tid);
+        }
+      }
+    }
+
+    for (const tid of templesToRevert) {
+      const rec = userRecordsMap[tid];
+      const hasUserData = (rec.notes && rec.notes.trim()) || 
+                          (rec.tags && rec.tags.trim()) || 
+                          (rec.visitDate && rec.visitDate.trim()) || 
+                          (templePhotosMap[tid] && templePhotosMap[tid].length > 0);
+
+      if (!hasUserData) {
+        delete userRecordsMap[tid];
+        await db.records.delete(tid);
+        if (currentUser && fbDb) {
+          fbDb.collection("users").doc(currentUser.uid).collection("records").doc(tid).delete().catch(console.warn);
+          fbDb.collection("pilgrimages").doc(tid).delete().catch(console.warn);
+        }
+      } else {
+        rec.status = "unvisited";
+        rec.updatedAt = new Date().toISOString();
+        userRecordsMap[tid] = rec;
+        await db.records.put(rec);
+        if (currentUser && fbDb) {
+          fbDb.collection("users").doc(currentUser.uid).collection("records").doc(tid).set(rec, { merge: true }).catch(console.warn);
+          fbDb.collection("pilgrimages").doc(tid).set(rec, { merge: true }).catch(console.warn);
+        }
+      }
+      changed = true;
+    }
+
+    if (changed) {
+      renderAllViews();
+    }
+  } catch (err) {
+    console.warn("校準規劃狀態異常:", err);
+  }
+}
+
 // 已存行程管理
 async function updateSavedItinerariesCount() {
   try {
@@ -2646,6 +2709,9 @@ window.openSavedItinerariesModal = async function() {
     switchView("planner");
     return;
   }
+
+  // 每次開啟已存行程視窗時自動校準規劃中數據
+  await reconcilePlannedStatus();
 
   const modal = document.getElementById("saved-itineraries-modal");
   const container = document.getElementById("saved-itineraries-list");
@@ -2709,8 +2775,17 @@ window.deleteSavedItinerary = async function(id) {
     if (currentUser && fbDb) {
       fbDb.collection("users").doc(currentUser.uid).collection("itineraries").doc(id).delete().catch(console.warn);
     }
+    // 若地圖正顯示此行程，關閉抽屜並清除路線折線
+    if (activeNavItinerary && activeNavItinerary.id === id) {
+      closeRouteNavDrawer();
+      clearRouteLayersOnly();
+      activeNavItinerary = null;
+    }
+    // 立即校準規劃中狀態，將已無所屬行程的廟宇重設為未參拜
+    await reconcilePlannedStatus();
     updateSavedItinerariesCount();
     openSavedItinerariesModal();
+    renderAllViews();
   }
 };
 
