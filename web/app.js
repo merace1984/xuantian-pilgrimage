@@ -425,8 +425,8 @@ function renderMapMarkers() {
 }
 
 function populateCountySelect() {
-  const select = document.getElementById("filter-county");
-  if (!select) return;
+  const mapSelect = document.getElementById("filter-county");
+  const listSelect = document.getElementById("list-filter-county");
 
   const countyCounts = {};
   TEMPLES_DATA.forEach(t => {
@@ -434,11 +434,48 @@ function populateCountySelect() {
   });
 
   const sorted = Object.entries(countyCounts).sort((a, b) => b[1] - a[1]);
-  select.innerHTML = '<option value="">全部縣市 (732)</option>';
-  sorted.forEach(([c, cnt]) => {
-    select.innerHTML += `<option value="${c}">${c} (${cnt})</option>`;
-  });
+  const optionsHtml = '<option value="">全部縣市 (732)</option>' +
+    sorted.map(([c, cnt]) => `<option value="${c}">${c} (${cnt})</option>`).join("");
+
+  if (mapSelect) mapSelect.innerHTML = optionsHtml;
+  if (listSelect) listSelect.innerHTML = optionsHtml;
 }
+
+function updateListDistrictSelect(selectedCounty) {
+  const districtSelect = document.getElementById("list-filter-district");
+  if (!districtSelect) return;
+
+  if (!selectedCounty) {
+    districtSelect.innerHTML = '<option value="">請先選擇縣市</option>';
+    districtSelect.disabled = true;
+    districtSelect.value = "";
+    return;
+  }
+
+  const districtCounts = {};
+  let totalInCounty = 0;
+  TEMPLES_DATA.forEach(t => {
+    if (t.county === selectedCounty) {
+      totalInCounty++;
+      districtCounts[t.district] = (districtCounts[t.district] || 0) + 1;
+    }
+  });
+
+  const sorted = Object.entries(districtCounts).sort((a, b) => b[1] - a[1]);
+  districtSelect.innerHTML = `<option value="">全部鄉鎮市區 (${totalInCounty})</option>` +
+    sorted.map(([d, cnt]) => `<option value="${d}">${d} (${cnt})</option>`).join("");
+  districtSelect.disabled = false;
+  districtSelect.value = "";
+}
+
+window.quickFilterList = function(countyName) {
+  const countySelect = document.getElementById("list-filter-county");
+  if (countySelect) {
+    countySelect.value = countyName;
+    updateListDistrictSelect(countyName);
+    renderListView();
+  }
+};
 
 window.switchCounty = function(countyName) {
   const select = document.getElementById("filter-county");
@@ -828,31 +865,42 @@ function renderListView() {
   const container = document.getElementById("temple-list-container");
   if (!container) return;
 
-  const countyFilter = document.getElementById("filter-county")?.value || "";
-  const statusFilter = document.getElementById("filter-status")?.value || "all";
-  const searchKey = document.getElementById("map-search")?.value.trim().toLowerCase() || "";
+  const countyFilter = document.getElementById("list-filter-county")?.value || "";
+  const districtFilter = document.getElementById("list-filter-district")?.value || "";
+  const statusFilter = document.getElementById("list-filter-status")?.value || "all";
+  const searchKey = document.getElementById("list-filter-search")?.value.trim().toLowerCase() || "";
 
   const list = TEMPLES_DATA.filter(t => {
     const record = userRecordsMap[t.id];
     const status = record?.status || "unvisited";
     if (countyFilter && t.county !== countyFilter) return false;
+    if (districtFilter && t.district !== districtFilter) return false;
     if (statusFilter !== "all" && status !== statusFilter) return false;
     if (searchKey) {
-      return t.name.toLowerCase().includes(searchKey) ||
-             t.district.toLowerCase().includes(searchKey) ||
-             t.address.toLowerCase().includes(searchKey);
+      const match = t.name.toLowerCase().includes(searchKey) ||
+                    t.district.toLowerCase().includes(searchKey) ||
+                    (t.address && t.address.toLowerCase().includes(searchKey));
+      if (!match) return false;
     }
     return true;
   });
 
-  document.getElementById("list-total-badge").textContent = `顯示 ${list.length} / 732 間`;
+  const badge = document.getElementById("list-total-badge");
+  if (badge) badge.textContent = `顯示 ${list.length} / 732 間`;
 
   if (list.length === 0) {
-    container.innerHTML = '<div class="col-span-2 text-center text-slate-400 py-12">無符合條件的廟宇</div>';
+    container.innerHTML = `
+      <div class="col-span-1 md:col-span-2 text-center text-slate-400 py-16 bg-white rounded-3xl border border-slate-200">
+        <i data-lucide="map-pin-off" class="w-12 h-12 mx-auto mb-3 text-slate-300"></i>
+        <h4 class="font-bold text-slate-700">無符合篩選條件的廟宇</h4>
+        <p class="text-xs text-slate-400 mt-1">請嘗試清除關鍵字或切換其他縣市／鄉鎮市區進行查找。</p>
+      </div>
+    `;
+    if (window.lucide) lucide.createIcons();
     return;
   }
 
-  container.innerHTML = list.slice(0, 100).map(t => {
+  container.innerHTML = list.map(t => {
     const record = userRecordsMap[t.id];
     const status = record?.status || "unvisited";
     const statusBadge = status === "visited" ? '<span class="text-xs font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">已參拜</span>' :
@@ -881,7 +929,7 @@ function renderListView() {
           </div>
           <div class="flex gap-2">
             ${t.lat && t.lon ? `<a href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(t.lat)},${encodeURIComponent(t.lon)}" target="_blank" class="px-2.5 py-1 bg-sky-50 text-sky-600 hover:bg-sky-100 text-xs font-bold rounded-lg transition">導航</a>` : ''}
-            <button onclick="openTempleModal('${escapeHtml(t.id)}')" class="px-3 py-1 bg-brand-600 text-white hover:bg-brand-500 text-xs font-bold rounded-lg transition">打卡</button>
+            <button onclick="openTempleModal('${escapeHtml(String(t.id || ''))}')" class="px-3 py-1 bg-brand-600 text-white hover:bg-brand-500 text-xs font-bold rounded-lg transition">${currentUser ? '打卡/編輯' : '詳情'}</button>
           </div>
         </div>
       </div>
@@ -1048,6 +1096,45 @@ function bindEvents() {
     document.getElementById("filter-status").value = "all";
     document.getElementById("map-search").value = "";
     renderMapMarkers();
+  });
+
+  // 廟宇名錄篩選事件
+  document.getElementById("list-filter-county")?.addEventListener("change", (e) => {
+    updateListDistrictSelect(e.target.value);
+    renderListView();
+  });
+
+  document.getElementById("list-filter-district")?.addEventListener("change", renderListView);
+  document.getElementById("list-filter-status")?.addEventListener("change", renderListView);
+
+  const listSearchInput = document.getElementById("list-filter-search");
+  const listClearBtn = document.getElementById("list-clear-search");
+  listSearchInput?.addEventListener("input", (e) => {
+    listClearBtn?.classList.toggle("hidden", !e.target.value);
+    renderListView();
+  });
+  listClearBtn?.addEventListener("click", () => {
+    if (listSearchInput) listSearchInput.value = "";
+    listClearBtn?.classList.add("hidden");
+    renderListView();
+  });
+
+  document.getElementById("btn-list-reset")?.addEventListener("click", () => {
+    const c = document.getElementById("list-filter-county");
+    const d = document.getElementById("list-filter-district");
+    const s = document.getElementById("list-filter-status");
+    const q = document.getElementById("list-filter-search");
+    const clr = document.getElementById("list-clear-search");
+    if (c) c.value = "";
+    if (d) {
+      d.innerHTML = '<option value="">請先選擇縣市</option>';
+      d.disabled = true;
+      d.value = "";
+    }
+    if (s) s.value = "all";
+    if (q) q.value = "";
+    if (clr) clr.classList.add("hidden");
+    renderListView();
   });
 
   document.getElementById("modal-close")?.addEventListener("click", () => {
