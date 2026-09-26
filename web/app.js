@@ -30,6 +30,7 @@ let currentUser = null;
 // === 3. 頁面載入啟動 ===
 document.addEventListener("DOMContentLoaded", async () => {
   if (window.lucide) lucide.createIcons();
+  updateAuthUI(null);
   
   // 優先載入本地 IndexedDB 快取 (保證 0.1 秒秒開)
   await loadUserDataFromLocal();
@@ -196,30 +197,55 @@ function updateAuthUI(user) {
   const btnLogin = document.getElementById("btn-login");
   const userProfile = document.getElementById("user-profile");
   const userAvatar = document.getElementById("user-avatar");
+  const settingsLockedBox = document.getElementById("settings-locked-box");
+  const settingsContentBox = document.getElementById("settings-content-box");
+  const settingsUserEmail = document.getElementById("settings-user-email");
 
   if (user) {
     if (btnLogin) btnLogin.classList.add("hidden");
-    if (userProfile) userProfile.classList.remove("hidden");
-    if (userProfile) userProfile.classList.add("flex");
+    if (userProfile) {
+      userProfile.classList.remove("hidden");
+      userProfile.classList.add("flex");
+    }
     if (userAvatar) userAvatar.src = user.photoURL || "https://ui-avatars.com/api/?name=" + encodeURIComponent(user.displayName || "User");
+    
+    // 設定頁解鎖
+    if (settingsLockedBox) settingsLockedBox.classList.add("hidden");
+    if (settingsContentBox) settingsContentBox.classList.remove("hidden");
+    if (settingsUserEmail) settingsUserEmail.textContent = user.email || user.displayName || "管理員已連線";
   } else {
     if (btnLogin) btnLogin.classList.remove("hidden");
-    if (userProfile) userProfile.classList.add("hidden");
-    if (userProfile) userProfile.classList.remove("flex");
+    if (userProfile) {
+      userProfile.classList.add("hidden");
+      userProfile.classList.remove("flex");
+    }
+    
+    // 設定頁鎖定
+    if (settingsLockedBox) settingsLockedBox.classList.remove("hidden");
+    if (settingsContentBox) settingsContentBox.classList.add("hidden");
   }
+
+  // 若當前廟宇彈窗開啟中，即時重新套用權限模式
+  const modal = document.getElementById("temple-modal");
+  if (currentActiveTemple && modal && !modal.classList.contains("hidden")) {
+    openTempleModal(currentActiveTemple.id);
+  }
+
   if (window.lucide) lucide.createIcons();
 }
 
 // Google 登入
 async function loginWithGoogle() {
   if (!window.isFirebaseConfigured || !window.isFirebaseConfigured()) {
-    alert("目前為本機單機模式。若需登入 Google 並啟用雲端同步，請先在 web/firebase-config.js 填入 Firebase 金鑰！");
+    alert("目前尚未設定 Firebase 雲端金鑰。\n\n請依照指引在 private/config/firebase-config.js 填入您的 Firebase 專案設定並上傳至網站根目錄，即可啟用 Google 帳號管理員驗證！");
     return;
   }
   const provider = new firebase.auth.GoogleAuthProvider();
   try {
-    await fbAuth.signInWithPopup(provider);
-    alert("🎉 登入成功！已啟用雲端寫入與同步權限。");
+    const result = await fbAuth.signInWithPopup(provider);
+    currentUser = result.user;
+    updateAuthUI(currentUser);
+    alert("🎉 登入成功！已驗證管理員身分，開啟設定與編輯權限。");
   } catch (err) {
     console.error("Google 登入失敗:", err);
     alert("登入失敗: " + err.message);
@@ -230,7 +256,9 @@ async function loginWithGoogle() {
 async function logoutGoogle() {
   if (fbAuth) {
     await fbAuth.signOut();
-    alert("已登出 Google 帳號。目前切換為唯讀瀏覽狀態。");
+    currentUser = null;
+    updateAuthUI(null);
+    alert("已登出 Google 帳號。目前切換為訪客唯讀狀態。");
   }
 }
 
@@ -478,10 +506,6 @@ window.openTempleModal = async function(templeId) {
   document.getElementById("meta-year").textContent = t.year ? `${t.year} 年` : "未詳載";
   document.getElementById("meta-source").href = t.sourceUrl || "#";
 
-  document.getElementById("input-visit-date").value = record.visitDate || new Date().toISOString().slice(0, 10);
-  document.getElementById("input-tag").value = record.tags || "";
-  document.getElementById("input-notes").value = record.notes || "";
-
   const navBtn = document.getElementById("btn-navigate");
   if (t.lat && t.lon) {
     navBtn.href = `https://www.google.com/maps/dir/?api=1&destination=${t.lat},${t.lon}`;
@@ -492,7 +516,79 @@ window.openTempleModal = async function(templeId) {
   }
 
   updateModalStatusBadge(record.status);
-  renderModalPhotos();
+
+  // 權限控管：判斷是否具備管理員編輯權限
+  const actionBar = document.getElementById("modal-action-bar");
+  const toggleBtn = document.getElementById("btn-toggle-status");
+  const visitorBanner = document.getElementById("modal-visitor-banner");
+  const readonlyRecord = document.getElementById("modal-readonly-record");
+  const editBox = document.getElementById("modal-edit-box");
+  const footerEdit = document.getElementById("modal-footer-edit");
+  const footerReadonly = document.getElementById("modal-footer-readonly");
+
+  if (currentUser) {
+    // === 管理者模式：解鎖編輯、上傳與刪除權限 ===
+    if (actionBar) actionBar.className = "grid grid-cols-2 gap-3";
+    if (toggleBtn) toggleBtn.classList.remove("hidden");
+    if (visitorBanner) visitorBanner.classList.add("hidden");
+    if (readonlyRecord) readonlyRecord.classList.add("hidden");
+    if (editBox) editBox.classList.remove("hidden");
+    if (footerEdit) footerEdit.classList.remove("hidden");
+    if (footerReadonly) footerReadonly.classList.add("hidden");
+
+    document.getElementById("input-visit-date").value = record.visitDate || new Date().toISOString().slice(0, 10);
+    document.getElementById("input-tag").value = record.tags || "";
+    document.getElementById("input-notes").value = record.notes || "";
+    renderModalPhotos();
+  } else {
+    // === 訪客模式：唯讀展示，隱藏所有編輯與儲存元件 ===
+    if (actionBar) actionBar.className = "grid grid-cols-1 gap-3";
+    if (toggleBtn) toggleBtn.classList.add("hidden");
+    if (visitorBanner) visitorBanner.classList.remove("hidden");
+    if (editBox) editBox.classList.add("hidden");
+    if (footerEdit) footerEdit.classList.add("hidden");
+    if (footerReadonly) footerReadonly.classList.remove("hidden");
+
+    // 若本廟有既有參拜紀錄或相片，展示唯讀內容
+    if (record.status === "visited" || (currentTempPhotos && currentTempPhotos.length > 0) || record.notes) {
+      if (readonlyRecord) {
+        readonlyRecord.classList.remove("hidden");
+        const metaEl = document.getElementById("modal-readonly-meta");
+        const notesEl = document.getElementById("modal-readonly-notes");
+        const photosEl = document.getElementById("modal-readonly-photos");
+
+        if (metaEl) {
+          metaEl.innerHTML = `
+            ${record.visitDate ? `<span class="text-[11px] bg-brand-gold/20 text-brand-600 font-bold px-2 py-0.5 rounded-full">📅 ${escapeHtml(record.visitDate)}</span>` : ''}
+            ${record.tags ? `<span class="text-[11px] bg-slate-200 text-slate-700 px-2 py-0.5 rounded-md">🏷️ ${escapeHtml(record.tags)}</span>` : ''}
+          `;
+        }
+
+        if (notesEl) {
+          notesEl.textContent = record.notes || "（未留下心得筆記）";
+        }
+
+        if (photosEl) {
+          if (currentTempPhotos.length > 0) {
+            photosEl.innerHTML = currentTempPhotos.map(p => {
+              const safeUrl = sanitizeImageUrl(p.dataUrl);
+              return `
+                <div class="aspect-square rounded-xl overflow-hidden border border-slate-200 bg-slate-100 shadow-sm">
+                  <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="block w-full h-full">
+                    <img src="${safeUrl}" class="w-full h-full object-cover hover:scale-105 transition duration-300" alt="相片" />
+                  </a>
+                </div>
+              `;
+            }).join("");
+          } else {
+            photosEl.innerHTML = '<p class="col-span-3 text-center text-xs text-slate-400 py-2">無現場相片</p>';
+          }
+        }
+      }
+    } else {
+      if (readonlyRecord) readonlyRecord.classList.add("hidden");
+    }
+  }
 
   document.getElementById("temple-modal").classList.remove("hidden");
   if (window.lucide) lucide.createIcons();
@@ -594,6 +690,10 @@ function dataURLtoBlob(dataurl) {
 
 // 儲存紀錄 (整合 Firebase 雲端與 Dexie 本地持久化)
 async function saveCurrentRecord() {
+  if (!currentUser) {
+    alert("權限不足：請先使用 Google 帳號登入後才能儲存參拜紀錄！");
+    return;
+  }
   if (!currentActiveTemple) return;
   const tid = currentActiveTemple.id;
 
@@ -694,6 +794,10 @@ async function saveCurrentRecord() {
 
 // 刪除紀錄
 async function deleteCurrentRecord() {
+  if (!currentUser) {
+    alert("權限不足：請先使用 Google 帳號登入後才能清除紀錄！");
+    return;
+  }
   if (!currentActiveTemple) return;
   if (!confirm("確定要刪除此廟宇的參拜紀錄與相片嗎？")) return;
 
@@ -881,7 +985,7 @@ function renderTimelineView() {
             </span>
             ${log.tags ? `<span class="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md">🏷️ ${escapeHtml(log.tags)}</span>` : ''}
           </div>
-          <button onclick="openTempleModal('${escapeHtml(String(t.id || ''))}')" class="text-xs text-brand-600 hover:underline font-bold">編輯</button>
+          <button onclick="openTempleModal('${escapeHtml(String(t.id || ''))}')" class="text-xs text-brand-600 hover:underline font-bold">${currentUser ? '編輯' : '查看詳情'}</button>
         </div>
 
         <div>
@@ -951,6 +1055,10 @@ function bindEvents() {
   });
 
   document.getElementById("btn-toggle-status")?.addEventListener("click", () => {
+    if (!currentUser) {
+      alert("權限不足：請先使用 Google 帳號登入後才能進行參拜打卡！");
+      return;
+    }
     if (!currentActiveTemple) return;
     const tid = currentActiveTemple.id;
     const cur = userRecordsMap[tid]?.status || "unvisited";
@@ -971,8 +1079,13 @@ function bindEvents() {
   document.getElementById("btn-login")?.addEventListener("click", loginWithGoogle);
   document.getElementById("btn-logout")?.addEventListener("click", logoutGoogle);
 
-  // 相片選擇與壓縮
+  // 相片選擇與壓縮 (限制管理員)
   document.getElementById("input-photo")?.addEventListener("change", async (e) => {
+    if (!currentUser) {
+      alert("權限不足：請先使用 Google 帳號登入後才能上傳照片！");
+      e.target.value = "";
+      return;
+    }
     const files = Array.from(e.target.files);
     if (!files.length) return;
 
@@ -991,8 +1104,12 @@ function bindEvents() {
     e.target.value = "";
   });
 
-  // 匯出/匯入備份
+  // 匯出/匯入備份 (限制管理員)
   document.getElementById("btn-export-backup")?.addEventListener("click", async () => {
+    if (!currentUser) {
+      alert("權限不足：請先使用 Google 帳號登入後才能匯出備份資料！");
+      return;
+    }
     const allRecords = await db.records.toArray();
     const allPhotos = await db.photos.toArray();
     const backupData = {
@@ -1012,6 +1129,11 @@ function bindEvents() {
   });
 
   document.getElementById("input-import-backup")?.addEventListener("change", (e) => {
+    if (!currentUser) {
+      alert("權限不足：請先使用 Google 帳號登入後才能匯入備份！");
+      e.target.value = "";
+      return;
+    }
     const file = e.target.files[0];
     if (!file) return;
 
@@ -1039,6 +1161,10 @@ function bindEvents() {
   });
 
   document.getElementById("btn-reset-db")?.addEventListener("click", async () => {
+    if (!currentUser) {
+      alert("權限不足：請先使用 Google 帳號登入後才能重設本機紀錄！");
+      return;
+    }
     if (confirm("⚠️ 警告：這將會清除您在本機所有的暫存參拜打卡紀錄與相片，確認清除？")) {
       await db.records.clear();
       await db.photos.clear();

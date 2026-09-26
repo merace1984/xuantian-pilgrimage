@@ -266,10 +266,39 @@
 
     <!-- View: Settings View -->
     <section id="view-settings" class="hidden flex-1 overflow-y-auto p-4 md:p-8 bg-slate-100">
-      <div class="max-w-2xl mx-auto space-y-6">
+      <!-- 1. 未登入鎖定畫面 -->
+      <div id="settings-locked-box" class="max-w-md mx-auto my-12 bg-white rounded-3xl p-8 border border-slate-200 shadow-sm text-center space-y-5">
+        <div class="w-16 h-16 bg-brand-50 text-brand-600 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
+          <i data-lucide="lock" class="w-8 h-8"></i>
+        </div>
         <div>
-          <h2 class="font-bold text-2xl text-slate-800">雲端與資料管理</h2>
-          <p class="text-sm text-slate-500 mt-1">整合 Firebase 雲端即時同步、相片圖床與離線本機備份</p>
+          <h3 class="text-xl font-extrabold text-slate-800">管理與同步權限控管</h3>
+          <p class="text-xs text-slate-500 mt-2 leading-relaxed">
+            系統設定、雲端即時同步、本地資料備份與還原等功能已啟用安全管制。請先使用 Google 帳號登入驗證管理員身分。
+          </p>
+        </div>
+        <button onclick="loginWithGoogle()" class="w-full py-3 px-4 bg-brand-600 hover:bg-brand-500 text-white font-bold rounded-xl text-sm shadow transition flex items-center justify-center gap-2">
+          <svg class="w-4 h-4" viewBox="0 0 24 24">
+            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+          </svg>
+          使用 Google 帳密登入啟用
+        </button>
+      </div>
+
+      <!-- 2. 已登入管理面板 -->
+      <div id="settings-content-box" class="hidden max-w-2xl mx-auto space-y-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="font-bold text-2xl text-slate-800">雲端與資料管理</h2>
+            <p class="text-sm text-slate-500 mt-1">整合 Firebase 雲端即時同步、相片圖床與離線本機備份</p>
+          </div>
+          <div class="flex items-center gap-2 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl text-xs text-emerald-800 font-semibold">
+            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+            <span id="settings-user-email">管理員已連線</span>
+          </div>
         </div>
 
         <!-- Firebase Cloud Status Box -->
@@ -284,7 +313,7 @@
           <p id="settings-firebase-desc" class="text-xs text-slate-500 leading-relaxed"></p>
           <div id="firebase-guide-box" class="hidden text-xs bg-slate-50 p-3 rounded-xl border border-slate-200 text-slate-600 space-y-1">
             <p><strong>💡 如何啟用 Firebase 雲端同步：</strong></p>
-            <p>1. 開啟 <code>web/firebase-config.js</code>，填入您在 Firebase Console 取得之專案設定。</p>
+            <p>1. 開啟 <code>private/config/firebase-config.js</code>，填入您在 Firebase Console 取得之專案設定並上傳至網站根目錄。</p>
             <p>2. 於 Firebase Console 啟用 <strong>Authentication (Google 登入)</strong>、<strong>Firestore</strong> 與 <strong>Storage</strong>。</p>
           </div>
         </div>
@@ -334,7 +363,7 @@
     </button>
     <button class="nav-tab flex flex-col items-center justify-center flex-1 py-1 hover:text-brand-600 transition" onclick="switchView('list')">
       <i data-lucide="list" class="w-5 h-5 mb-0.5"></i>
-      <span class="text-[11px] font-medium">廟宇名錄</span>
+      <span class="text-[11px] font-medium">廟宇列表</span>
     </button>
     <button class="nav-tab flex flex-col items-center justify-center flex-1 py-1 hover:text-brand-600 transition" onclick="switchView('dashboard')">
       <i data-lucide="trophy" class="w-5 h-5 mb-0.5"></i>
@@ -368,7 +397,8 @@
       </div>
 
       <div class="flex-1 overflow-y-auto p-5 space-y-5">
-        <div class="grid grid-cols-2 gap-3">
+        <!-- 導航與狀態切換列 -->
+        <div id="modal-action-bar" class="grid grid-cols-2 gap-3">
           <a id="btn-navigate" href="#" target="_blank" class="flex items-center justify-center gap-2 py-2.5 px-4 bg-sky-500 hover:bg-sky-600 text-white rounded-xl font-bold text-sm shadow transition">
             <i data-lucide="navigation" class="w-4 h-4"></i>
             機車導航前往
@@ -379,7 +409,32 @@
           </button>
         </div>
 
-        <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-4">
+        <!-- 訪客唯讀狀態提示條 (未登入時呈現) -->
+        <div id="modal-visitor-banner" class="hidden bg-amber-50 border border-amber-200 rounded-2xl p-3.5 flex items-center justify-between text-xs text-amber-800">
+          <div class="flex items-center gap-2">
+            <i data-lucide="shield" class="w-4 h-4 text-amber-600 shrink-0"></i>
+            <span>目前為<strong>訪客唯讀模式</strong>。登入 Google 帳號後即可打卡與編輯。</span>
+          </div>
+          <button onclick="loginWithGoogle()" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl shadow transition shrink-0">
+            Google 登入
+          </button>
+        </div>
+
+        <!-- 唯讀心得與相片展示區塊 (未登入但已打卡時呈現) -->
+        <div id="modal-readonly-record" class="hidden bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
+          <div class="flex items-center justify-between border-b border-slate-200 pb-2">
+            <h4 class="font-bold text-xs text-slate-600 flex items-center gap-1.5">
+              <i data-lucide="book-open" class="w-4 h-4 text-brand-600"></i>
+              參拜足跡記錄
+            </h4>
+            <div id="modal-readonly-meta" class="flex items-center gap-2"></div>
+          </div>
+          <div id="modal-readonly-notes" class="text-xs text-slate-700 whitespace-pre-wrap leading-relaxed py-1"></div>
+          <div id="modal-readonly-photos" class="grid grid-cols-3 gap-2 pt-1"></div>
+        </div>
+
+        <!-- 管理者編輯區塊 (已登入時呈現) -->
+        <div id="modal-edit-box" class="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-4">
           <h4 class="font-bold text-sm text-slate-700 flex items-center gap-1.5">
             <i data-lucide="edit-3" class="w-4 h-4 text-brand-600"></i>
             參拜筆記與心得
@@ -419,6 +474,7 @@
           </div>
         </div>
 
+        <!-- 廟宇基本中繼資料 -->
         <div class="text-xs text-slate-600 space-y-1.5 pt-2 border-t border-slate-100">
           <div class="flex justify-between">
             <span class="text-slate-400">主祀神尊稱：</span>
@@ -435,12 +491,21 @@
         </div>
       </div>
 
-      <div class="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+      <!-- 底部列：管理者編輯模式 -->
+      <div id="modal-footer-edit" class="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
         <button id="btn-delete-record" class="text-xs text-rose-500 hover:text-rose-700 font-semibold px-2 py-1">
           清除本廟紀錄
         </button>
         <button id="btn-save-record" class="px-6 py-2.5 bg-brand-600 hover:bg-brand-500 text-white font-bold rounded-xl text-sm shadow transition">
           儲存紀錄
+        </button>
+      </div>
+
+      <!-- 底部列：訪客唯讀模式 -->
+      <div id="modal-footer-readonly" class="hidden p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+        <span class="text-xs text-slate-400">訪客模式（唯讀瀏覽）</span>
+        <button onclick="document.getElementById('temple-modal').classList.add('hidden')" class="px-5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl text-xs transition">
+          關閉視窗
         </button>
       </div>
     </div>
