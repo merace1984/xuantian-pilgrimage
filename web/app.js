@@ -919,7 +919,7 @@ window.openTempleModal = async function(templeId) {
         }
 
         if (notesEl) {
-          notesEl.textContent = record.notes || "（未留下心得筆記）";
+          notesEl.textContent = (record.notes && record.notes.trim()) ? record.notes.trim() : "（未留下心得筆記）";
         }
 
         if (photosEl) {
@@ -1360,7 +1360,7 @@ function renderListView() {
           </div>
           <h4 class="font-bold text-base text-slate-800">${escapeHtml(t.name)}</h4>
           <p class="text-xs text-slate-500 line-clamp-1">${escapeHtml(t.address || "無詳細地址")}</p>
-          ${record?.notes ? `<p class="text-xs text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-100 line-clamp-2">💬 ${escapeHtml(record.notes)}</p>` : ''}
+          ${record?.notes && record.notes.trim() ? `<p class="text-xs text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-100 line-clamp-2">💬 ${escapeHtml(record.notes.trim())}</p>` : ''}
         </div>
 
         <div class="flex items-center justify-between pt-3 mt-2 border-t border-slate-100">
@@ -1780,10 +1780,8 @@ function renderTimelineView() {
           <p class="text-xs text-slate-500 mt-0.5">${escapeHtml(t.address || "")}</p>
         </div>
 
-        ${log.notes ? `
-          <div class="text-sm text-slate-700 bg-slate-50 p-3.5 rounded-2xl border border-slate-100 whitespace-pre-wrap leading-relaxed">
-            ${escapeHtml(log.notes)}
-          </div>
+        ${log.notes && log.notes.trim() ? `
+          <div class="text-sm text-slate-700 bg-slate-50 p-3.5 md:p-4 rounded-2xl border border-slate-100 whitespace-pre-wrap leading-relaxed break-words">${escapeHtml(log.notes.trim())}</div>
         ` : ''}
 
         ${photosGrid}
