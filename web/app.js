@@ -254,6 +254,16 @@ function initFirebaseEngine() {
     fbStorage = firebase.storage();
     fbAuth = firebase.auth();
 
+    // 限制 Firebase Storage 重試逾時上限 (預設 10 分鐘，縮短為 6 秒防呆防凍結)
+    if (fbStorage) {
+      try {
+        fbStorage.setMaxUploadRetryTime(6000);
+        fbStorage.setMaxOperationRetryTime(6000);
+      } catch (stErr) {
+        console.warn("Storage retry 設定警示:", stErr);
+      }
+    }
+
     // 啟用 Firestore 離線持久化 (斷網暫存，連網自動同步)
     fbDb.enablePersistence({ synchronizeTabs: true }).catch((err) => {
       console.warn("Firestore 離線快取初始化:", err.code);
@@ -378,10 +388,11 @@ function setupUserDataSync(user) {
             userRecordsMap[tid] = rec;
             await db.records.put(rec);
             if (rec.photos && Array.isArray(rec.photos)) {
-              templePhotosMap[tid] = rec.photos;
-              await db.photos.where("templeId").equals(tid).delete();
-              if (rec.photos.length > 0) {
-                await db.photos.bulkAdd(rec.photos);
+              const remoteHttpPhotos = rec.photos.filter(p => p.dataUrl && p.dataUrl.startsWith("http"));
+              if (remoteHttpPhotos.length > 0) {
+                templePhotosMap[tid] = remoteHttpPhotos;
+                await db.photos.where("templeId").equals(tid).delete();
+                await db.photos.bulkAdd(remoteHttpPhotos);
               }
             }
           } else if (change.type === "removed") {
@@ -1018,20 +1029,39 @@ async function compressImage(file, maxDimension = 1200, quality = 0.8) {
   });
 }
 
-// 輔助：將 Base64 DataURL 轉成 Blob 供 Firebase Storage 上傳
-function dataURLtoBlob(dataurl) {
-  const arr = dataurl.split(',');
-  const mime = arr[0].match(/:(.*?);/)[1];
-  const bstr = atob(arr[1]);
-  let n = bstr.length;
-  const u8arr = new Uint8Array(n);
-  while (n--) {
-    u8arr[n] = bstr.charCodeAt(n);
-  }
-  return new Blob([u8arr], { type: mime });
+// 通用非同步逾時保護工具，確保網路或 Storage 異常時絕不阻塞主執行緒
+function withTimeout(promise, ms = 6000, errorMsg = "操作逾時") {
+  let timer;
+  const timeoutPromise = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(errorMsg)), ms);
+  });
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
 }
 
-// 儲存紀錄 (整合 Firebase 雲端與 Dexie 本地持久化)
+// 輔助：將 Base64 DataURL 轉成 Blob 供 Firebase Storage 上傳
+function dataURLtoBlob(dataurl) {
+  if (!dataurl || typeof dataurl !== "string") return null;
+  const parts = dataurl.split(',');
+  if (parts.length < 2) return null;
+  const mimeMatch = parts[0].match(/:(.*?);/);
+  const mime = mimeMatch ? mimeMatch[1] : "image/webp";
+  try {
+    const bstr = atob(parts[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new Blob([u8arr], { type: mime });
+  } catch (e) {
+    console.warn("Base64 轉 Blob 失敗:", e);
+    return null;
+  }
+}
+
+// 儲存紀錄 (採 Local-First 離線優先架構，保證本地秒存永不遺失，雲端非同步同步)
 async function saveCurrentRecord() {
   if (!currentUser) {
     alert("權限不足：請先使用 Google 帳號登入後才能儲存參拜紀錄！");
@@ -1049,46 +1079,23 @@ async function saveCurrentRecord() {
   if (status === "unvisited") status = "visited";
 
   const saveBtn = document.getElementById("btn-save-record");
+  if (!saveBtn) return;
   saveBtn.disabled = true;
-  saveBtn.innerHTML = '正在儲存...';
+  saveBtn.innerHTML = '<span class="inline-block animate-spin mr-1">⏳</span>正在保存本地快取...';
+
+  let cloudPhotoUploadedCount = 0;
+  let cloudPhotoFailed = false;
+  let cloudSyncFailed = false;
 
   try {
-    const finalPhotoUrls = [];
-
-    // 若已啟用 Firebase 且使用者已登入，上傳相片至 Cloud Storage
-    const isCloudEnabled = fbStorage && fbDb && currentUser;
-
-    if (isCloudEnabled && currentTempPhotos.length > 0) {
-      setCloudStatus("syncing", "上傳相片中...");
-      for (let i = 0; i < currentTempPhotos.length; i++) {
-        const p = currentTempPhotos[i];
-        if (p.dataUrl.startsWith("http")) {
-          // 已是遠端 URL，保留
-          finalPhotoUrls.push(p);
-        } else {
-          // 本地 Base64，上傳至 Cloud Storage
-          const blob = dataURLtoBlob(p.dataUrl);
-          const fileName = `photo_${Date.now()}_${i}.webp`;
-          const storageRef = fbStorage.ref(`photos/${tid}/${fileName}`);
-          await storageRef.put(blob, { contentType: blob.type || "image/webp" });
-          const downloadUrl = await storageRef.getDownloadURL();
-          finalPhotoUrls.push({
-            templeId: tid,
-            dataUrl: downloadUrl,
-            createdAt: new Date().toISOString()
-          });
-        }
-      }
-    } else {
-      // 離線或未登入模式：保留本地 WebP DataURL
-      currentTempPhotos.forEach((p, idx) => {
-        finalPhotoUrls.push({
-          templeId: tid,
-          dataUrl: p.dataUrl,
-          createdAt: new Date().toISOString()
-        });
-      });
-    }
+    // ---------------------------------------------------------
+    // 步驟 1：【本機優先】第一時間寫入本地 IndexedDB (秒級完成，保證資料永不卡死)
+    // ---------------------------------------------------------
+    const localPhotos = currentTempPhotos.map(p => ({
+      templeId: tid,
+      dataUrl: p.dataUrl,
+      createdAt: p.createdAt || new Date().toISOString()
+    }));
 
     const record = {
       templeId: tid,
@@ -1099,31 +1106,118 @@ async function saveCurrentRecord() {
       visitDate,
       tags,
       notes,
-      photos: finalPhotoUrls,
+      photos: localPhotos,
       userId: currentUser ? currentUser.uid : null,
       updatedAt: new Date().toISOString()
     };
 
-    // 1. 寫入本地 IndexedDB (秒速完成)
+    // 寫入本地 Dexie IndexedDB
     await db.records.put(record);
     userRecordsMap[tid] = record;
 
     await db.photos.where("templeId").equals(tid).delete();
-    if (finalPhotoUrls.length > 0) {
-      await db.photos.bulkAdd(finalPhotoUrls);
-      templePhotosMap[tid] = finalPhotoUrls;
+    if (localPhotos.length > 0) {
+      await db.photos.bulkAdd(localPhotos);
+      templePhotosMap[tid] = localPhotos;
     } else {
       delete templePhotosMap[tid];
     }
 
-    // 2. 寫入 Firebase Firestore (雲端雙向同步)
-    if (fbDb && currentUser) {
-      setCloudStatus("syncing", "雲端同步中...");
-      // 同步至個人專屬紀錄庫
-      await fbDb.collection("users").doc(currentUser.uid).collection("records").doc(tid).set(record, { merge: true });
-      // 鏡像至全域公開展示展示層
-      await fbDb.collection("pilgrimages").doc(tid).set(record, { merge: true });
-      setCloudStatus("online", "雲端已連線");
+    // ---------------------------------------------------------
+    // 步驟 2：【雲端相片同步】若啟用 Firebase 且有相片，嘗試上傳至 Cloud Storage
+    // ---------------------------------------------------------
+    const isCloudEnabled = fbStorage && fbDb && currentUser;
+
+    if (isCloudEnabled && localPhotos.length > 0) {
+      saveBtn.innerHTML = '<span class="inline-block animate-spin mr-1">☁️</span>正在同步雲端相片...';
+      setCloudStatus("syncing", "同步相片中...");
+
+      for (let i = 0; i < localPhotos.length; i++) {
+        const p = localPhotos[i];
+        if (p.dataUrl && p.dataUrl.startsWith("http")) {
+          // 已經是遠端網址
+          cloudPhotoUploadedCount++;
+          continue;
+        }
+
+        // 本地 Base64，嘗試上傳至 Firebase Cloud Storage (單張最長 6 秒逾時防凍結)
+        try {
+          const blob = dataURLtoBlob(p.dataUrl);
+          if (!blob) {
+            console.warn(`第 ${i + 1} 張相片轉換 Blob 失敗，保留本機快取`);
+            continue;
+          }
+          const fileName = `photo_${Date.now()}_${i}.webp`;
+          const storageRef = fbStorage.ref(`photos/${tid}/${fileName}`);
+
+          await withTimeout(
+            storageRef.put(blob, { contentType: blob.type || "image/webp" }),
+            6000,
+            "Cloud Storage 上傳逾時"
+          );
+
+          const downloadUrl = await withTimeout(
+            storageRef.getDownloadURL(),
+            4000,
+            "取得相片下載網址逾時"
+          );
+
+          p.dataUrl = downloadUrl;
+          cloudPhotoUploadedCount++;
+        } catch (uploadErr) {
+          console.warn(`第 ${i + 1} 張相片雲端上傳略過或逾時 (已妥善保留本機 WebP 快取):`, uploadErr);
+          cloudPhotoFailed = true;
+        }
+      }
+
+      // 若有相片成功轉為雲端 URL，更新本地 IndexedDB 中對應的 URL
+      if (cloudPhotoUploadedCount > 0) {
+        record.photos = localPhotos;
+        await db.records.put(record);
+        await db.photos.where("templeId").equals(tid).delete();
+        await db.photos.bulkAdd(localPhotos);
+        userRecordsMap[tid] = record;
+        templePhotosMap[tid] = localPhotos;
+      }
+    }
+
+    // ---------------------------------------------------------
+    // 步驟 3：【Firestore 雲端寫入】同步紀錄至個人專屬庫與全域鏡像
+    // ---------------------------------------------------------
+    if (isCloudEnabled) {
+      saveBtn.innerHTML = '<span class="inline-block animate-spin mr-1">☁️</span>同步雲端紀錄中...';
+      setCloudStatus("syncing", "同步紀錄中...");
+
+      // 防護：過濾掉未轉成遠端 URL 的龐大 Base64，避免超過 Firestore 1MB 上限
+      const firestoreRecord = {
+        ...record,
+        photos: (record.photos || []).map(p => {
+          if (p.dataUrl && p.dataUrl.startsWith("http")) {
+            return p;
+          }
+          return {
+            templeId: p.templeId,
+            isLocalCache: true,
+            createdAt: p.createdAt || new Date().toISOString()
+          };
+        })
+      };
+
+      try {
+        await withTimeout(
+          Promise.all([
+            fbDb.collection("users").doc(currentUser.uid).collection("records").doc(tid).set(firestoreRecord, { merge: true }),
+            fbDb.collection("pilgrimages").doc(tid).set(firestoreRecord, { merge: true })
+          ]),
+          5000,
+          "Firestore 寫入逾時"
+        );
+        setCloudStatus("online", "雲端已連線");
+      } catch (fsErr) {
+        console.warn("Firestore 同步提醒 (本地已優先安全儲存):", fsErr);
+        cloudSyncFailed = true;
+        setCloudStatus("offline", "雲端連線延遲 (已存本地)");
+      }
     }
 
     // 若當前有活動行程且打卡為目前站點，自動推進至下一站
@@ -1143,18 +1237,30 @@ async function saveCurrentRecord() {
       district: currentActiveTemple.district,
       status: status,
       has_notes: !!notes,
-      photos_count: finalPhotoUrls.length
+      photos_count: localPhotos.length
     });
 
-    document.getElementById("temple-modal").classList.add("hidden");
+    // 關閉 Modal 並重新渲染所有視圖
+    const modal = document.getElementById("temple-modal");
+    if (modal) modal.classList.add("hidden");
     renderAllViews();
-    alert("🎉 參拜紀錄儲存成功！" + (isCloudEnabled ? "（已同步至雲端）" : ""));
+
+    // 提示回饋
+    if (!isCloudEnabled) {
+      alert("🎉 參拜紀錄與相片已成功儲存於本機！");
+    } else if (cloudPhotoFailed || cloudSyncFailed) {
+      alert("🎉 參拜紀錄與相片已安全保存於本機！\n\n💡 提示：因雲端連線逾時或權限問題，相片已轉為瀏覽器本機離線安全快取，完全不影響本機瀏覽與管理。");
+    } else {
+      alert("🎉 參拜紀錄與相片已成功儲存並同步至雲端！");
+    }
+
   } catch (err) {
     console.error("儲存失敗:", err);
-    alert("儲存失敗: " + err.message);
+    alert("儲存過程發生異常: " + err.message);
   } finally {
     saveBtn.disabled = false;
-    saveBtn.innerHTML = '儲存紀錄';
+    saveBtn.innerHTML = '<i data-lucide="save" class="w-4 h-4 inline mr-1"></i>儲存紀錄';
+    if (window.lucide) lucide.createIcons();
   }
 }
 
