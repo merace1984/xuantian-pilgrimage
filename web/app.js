@@ -63,6 +63,18 @@ function isEmailAllowed(email) {
   return allowed.map(e => String(e).toLowerCase().trim()).includes(String(email).toLowerCase().trim());
 }
 
+// === 2.5 行動裝置動態可視高度自適應 (防網址列推擠造成底部導覽列隱形) ===
+function adjustViewportHeight() {
+  const vh = window.innerHeight;
+  document.documentElement.style.setProperty('--app-height', `${vh}px`);
+  if (typeof map !== "undefined" && map) {
+    map.invalidateSize();
+  }
+}
+window.addEventListener("resize", adjustViewportHeight);
+window.addEventListener("orientationchange", adjustViewportHeight);
+adjustViewportHeight();
+
 // === 3. 頁面載入啟動 ===
 document.addEventListener("DOMContentLoaded", async () => {
   if (window.lucide) lucide.createIcons();

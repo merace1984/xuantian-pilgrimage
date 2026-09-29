@@ -50,13 +50,20 @@
   <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-storage-compat.js"></script>
 
   <style>
-    /* Reset & Viewport Lock */
+    /* Reset & Mobile Viewport Lock (動態視窗高度鎖定，防止手機網址列推擠底欄) */
     html, body {
       height: 100%;
+      height: var(--app-height, 100dvh);
+      max-height: var(--app-height, 100dvh);
       width: 100%;
       margin: 0;
       padding: 0;
       overflow: hidden;
+      position: fixed;
+      left: 0;
+      top: 0;
+      right: 0;
+      bottom: 0;
     }
 
     ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -160,7 +167,7 @@
     }
   </style>
 </head>
-<body class="bg-slate-50 text-slate-800 antialiased flex flex-col h-screen overflow-hidden">
+<body class="bg-slate-50 text-slate-800 antialiased flex flex-col h-full overflow-hidden">
 
   <!-- Top Navbar -->
   <header class="bg-brand-600 text-white shadow-md z-30 shrink-0">
@@ -206,7 +213,7 @@
   </header>
 
   <!-- Main Content Area -->
-  <div class="flex-1 relative overflow-hidden flex flex-col md:flex-row">
+  <div class="flex-1 min-h-0 relative overflow-hidden flex flex-col md:flex-row">
     
     <!-- View: Map View -->
     <section id="view-map" class="flex-1 relative w-full h-full">
@@ -325,7 +332,7 @@
     </section>
 
     <!-- View: Route Planner (智能朝聖路線規劃器) -->
-    <section id="view-planner" class="hidden flex-1 overflow-y-auto p-4 md:p-6 bg-slate-100">
+    <section id="view-planner" class="hidden flex-1 min-h-0 overflow-y-auto p-4 md:p-6 pb-24 md:pb-8 bg-slate-100">
       <!-- 1. 路線規劃未登入鎖定畫面 -->
       <div id="planner-locked-box" class="max-w-md mx-auto my-12 bg-white rounded-3xl p-8 border border-slate-200 shadow-sm text-center space-y-5">
         <div class="w-16 h-16 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
@@ -588,7 +595,7 @@
     </section>
 
     <!-- View: List View -->
-    <section id="view-list" class="hidden flex-1 overflow-y-auto p-4 md:p-6 bg-slate-100">
+    <section id="view-list" class="hidden flex-1 min-h-0 overflow-y-auto p-4 md:p-6 pb-24 md:pb-8 bg-slate-100">
       <div class="max-w-5xl mx-auto space-y-4">
         <!-- 標題與統計 -->
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -684,7 +691,7 @@
     </section>
 
     <!-- View: Dashboard View -->
-    <section id="view-dashboard" class="hidden flex-1 overflow-y-auto p-4 md:p-8 bg-slate-100">
+    <section id="view-dashboard" class="hidden flex-1 min-h-0 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8 bg-slate-100">
       <div class="max-w-4xl mx-auto space-y-6">
         <!-- 頂部標題與統計範疇切換 -->
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -807,7 +814,7 @@
     </section>
 
     <!-- View: Timeline View -->
-    <section id="view-timeline" class="hidden flex-1 overflow-y-auto p-4 md:p-8 bg-slate-100">
+    <section id="view-timeline" class="hidden flex-1 min-h-0 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8 bg-slate-100">
       <div class="max-w-3xl mx-auto space-y-6">
         <div>
           <h2 class="font-bold text-2xl text-slate-800">參拜足跡日誌</h2>
@@ -819,7 +826,7 @@
     </section>
 
     <!-- View: Settings View -->
-    <section id="view-settings" class="hidden flex-1 overflow-y-auto p-4 md:p-8 bg-slate-100">
+    <section id="view-settings" class="hidden flex-1 min-h-0 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8 bg-slate-100">
       <!-- 1. 未登入鎖定畫面 -->
       <div id="settings-locked-box" class="max-w-md mx-auto my-12 bg-white rounded-3xl p-8 border border-slate-200 shadow-sm text-center space-y-5">
         <div class="w-16 h-16 bg-brand-50 text-brand-600 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
@@ -910,30 +917,30 @@
   </div>
 
   <!-- Bottom Navigation Tab Bar -->
-  <nav class="bg-white border-t border-slate-200 z-30 shrink-0 h-16 px-1.5 py-1 flex items-center justify-around gap-1">
-    <button class="nav-tab active flex flex-col items-center justify-center flex-1 py-1 px-0.5 rounded-2xl transition-all duration-200 bg-amber-100/70 text-brand-600 font-bold" onclick="switchView('map')">
-      <i data-lucide="map-pin" class="w-4 h-4 mb-0.5"></i>
-      <span class="text-[10px] md:text-[11px]">朝聖地圖</span>
+  <nav id="bottom-nav-bar" class="bg-white/95 backdrop-blur-md border-t border-slate-200 z-40 shrink-0 min-h-[4rem] px-1 py-1 flex items-center justify-around gap-0.5 sm:gap-1 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] select-none" style="padding-bottom: max(6px, env(safe-area-inset-bottom, 0px));">
+    <button class="nav-tab active flex flex-col items-center justify-center flex-1 py-1 px-0.5 rounded-xl md:rounded-2xl transition-all duration-200 bg-amber-100/70 text-brand-600 font-bold" onclick="switchView('map')">
+      <i data-lucide="map-pin" class="w-4 h-4 mb-0.5 shrink-0"></i>
+      <span class="text-[10px] md:text-[11px] leading-tight truncate">朝聖地圖</span>
     </button>
-    <button class="nav-tab flex flex-col items-center justify-center flex-1 py-1 px-0.5 rounded-2xl transition-all duration-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 font-medium" onclick="switchView('list')">
-      <i data-lucide="list" class="w-4 h-4 mb-0.5"></i>
-      <span class="text-[10px] md:text-[11px]">廟宇名錄</span>
+    <button class="nav-tab flex flex-col items-center justify-center flex-1 py-1 px-0.5 rounded-xl md:rounded-2xl transition-all duration-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 font-medium" onclick="switchView('list')">
+      <i data-lucide="list" class="w-4 h-4 mb-0.5 shrink-0"></i>
+      <span class="text-[10px] md:text-[11px] leading-tight truncate">廟宇名錄</span>
     </button>
-    <button class="nav-tab flex flex-col items-center justify-center flex-1 py-1 px-0.5 rounded-2xl transition-all duration-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 font-medium" onclick="switchView('planner')">
-      <i data-lucide="route" class="w-4 h-4 mb-0.5 text-amber-600"></i>
-      <span class="text-[10px] md:text-[11px]">路線規劃</span>
+    <button class="nav-tab flex flex-col items-center justify-center flex-1 py-1 px-0.5 rounded-xl md:rounded-2xl transition-all duration-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 font-medium" onclick="switchView('planner')">
+      <i data-lucide="route" class="w-4 h-4 mb-0.5 shrink-0 text-amber-600"></i>
+      <span class="text-[10px] md:text-[11px] leading-tight truncate">路線規劃</span>
     </button>
-    <button class="nav-tab flex flex-col items-center justify-center flex-1 py-1 px-0.5 rounded-2xl transition-all duration-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 font-medium" onclick="switchView('dashboard')">
-      <i data-lucide="trophy" class="w-4 h-4 mb-0.5"></i>
-      <span class="text-[10px] md:text-[11px]">進度統計</span>
+    <button class="nav-tab flex flex-col items-center justify-center flex-1 py-1 px-0.5 rounded-xl md:rounded-2xl transition-all duration-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 font-medium" onclick="switchView('dashboard')">
+      <i data-lucide="trophy" class="w-4 h-4 mb-0.5 shrink-0"></i>
+      <span class="text-[10px] md:text-[11px] leading-tight truncate">進度統計</span>
     </button>
-    <button class="nav-tab flex flex-col items-center justify-center flex-1 py-1 px-0.5 rounded-2xl transition-all duration-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 font-medium" onclick="switchView('timeline')">
-      <i data-lucide="image" class="w-4 h-4 mb-0.5"></i>
-      <span class="text-[10px] md:text-[11px]">足跡日誌</span>
+    <button class="nav-tab flex flex-col items-center justify-center flex-1 py-1 px-0.5 rounded-xl md:rounded-2xl transition-all duration-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 font-medium" onclick="switchView('timeline')">
+      <i data-lucide="image" class="w-4 h-4 mb-0.5 shrink-0"></i>
+      <span class="text-[10px] md:text-[11px] leading-tight truncate">足跡日誌</span>
     </button>
-    <button class="nav-tab flex flex-col items-center justify-center flex-1 py-1 px-0.5 rounded-2xl transition-all duration-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 font-medium" onclick="switchView('settings')">
-      <i data-lucide="settings" class="w-4 h-4 mb-0.5"></i>
-      <span class="text-[10px] md:text-[11px]">設定備份</span>
+    <button class="nav-tab flex flex-col items-center justify-center flex-1 py-1 px-0.5 rounded-xl md:rounded-2xl transition-all duration-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 font-medium" onclick="switchView('settings')">
+      <i data-lucide="settings" class="w-4 h-4 mb-0.5 shrink-0"></i>
+      <span class="text-[10px] md:text-[11px] leading-tight truncate">設定備份</span>
     </button>
   </nav>
 
