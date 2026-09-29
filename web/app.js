@@ -733,7 +733,7 @@ function initMap() {
   map = L.map("map", {
     center: [23.5, 120.8],
     zoom: 8,
-    layers: [googleStreet],
+    layers: [osmStandard],
     zoomControl: false,
     scrollWheelZoom: true
   });
@@ -742,9 +742,9 @@ function initMap() {
   L.control.zoom({ position: "bottomright" }).addTo(map);
 
   const baseLayers = {
-    "Google 街道圖 (推薦)": googleStreet,
+    "OpenStreetMap 標準圖 (預設)": osmStandard,
+    "Google 街道圖": googleStreet,
     "臺灣通用電子地圖 (國土測繪)": nlscEmap,
-    "OpenStreetMap 標準圖": osmStandard,
     "Carto 典雅淺色圖": cartoVoyager
   };
   L.control.layers(baseLayers, null, { position: "topright" }).addTo(map);
