@@ -295,7 +295,10 @@ function initFirebaseEngine() {
           db.records.put(data); // 同步鏡像至本機
 
           if (data.photos && Array.isArray(data.photos)) {
-            templePhotosMap[tid] = data.photos;
+            const validPhotos = data.photos.filter(p => p.dataUrl && typeof p.dataUrl === "string" && (p.dataUrl.startsWith("http") || p.dataUrl.startsWith("data:image/")));
+            if (validPhotos.length > 0) {
+              templePhotosMap[tid] = validPhotos;
+            }
           }
         } else if (change.type === "removed") {
           delete userRecordsMap[tid];
@@ -388,11 +391,11 @@ function setupUserDataSync(user) {
             userRecordsMap[tid] = rec;
             await db.records.put(rec);
             if (rec.photos && Array.isArray(rec.photos)) {
-              const remoteHttpPhotos = rec.photos.filter(p => p.dataUrl && p.dataUrl.startsWith("http"));
-              if (remoteHttpPhotos.length > 0) {
-                templePhotosMap[tid] = remoteHttpPhotos;
+              const validPhotos = rec.photos.filter(p => p.dataUrl && typeof p.dataUrl === "string" && (p.dataUrl.startsWith("http") || p.dataUrl.startsWith("data:image/")));
+              if (validPhotos.length > 0) {
+                templePhotosMap[tid] = validPhotos;
                 await db.photos.where("templeId").equals(tid).delete();
-                await db.photos.bulkAdd(remoteHttpPhotos);
+                await db.photos.bulkAdd(validPhotos);
               }
             }
           } else if (change.type === "removed") {
@@ -923,9 +926,11 @@ window.openTempleModal = async function(templeId) {
         }
 
         if (photosEl) {
-          if (currentTempPhotos.length > 0) {
-            photosEl.innerHTML = currentTempPhotos.map(p => {
+          const validVisiblePhotos = currentTempPhotos.filter(p => p.dataUrl && typeof p.dataUrl === "string" && p.dataUrl.length > 0);
+          if (validVisiblePhotos.length > 0) {
+            photosEl.innerHTML = validVisiblePhotos.map(p => {
               const safeUrl = sanitizeImageUrl(p.dataUrl);
+              if (!safeUrl) return '';
               return `
                 <div class="aspect-square rounded-xl overflow-hidden border border-slate-200 bg-slate-100 shadow-sm">
                   <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="block w-full h-full">
@@ -975,19 +980,27 @@ function renderModalPhotos() {
   const container = document.getElementById("photos-container");
   if (!container) return;
 
-  if (currentTempPhotos.length === 0) {
+  const validPhotos = currentTempPhotos.filter(p => p.dataUrl && typeof p.dataUrl === "string" && p.dataUrl.length > 0);
+
+  if (validPhotos.length === 0) {
     container.innerHTML = '<p id="no-photos-hint" class="col-span-3 text-center text-xs text-slate-400 py-4">尚未上傳照片</p>';
     return;
   }
 
-  container.innerHTML = currentTempPhotos.map((p, idx) => `
+  container.innerHTML = validPhotos.map((p, idx) => {
+    const safeUrl = sanitizeImageUrl(p.dataUrl);
+    if (!safeUrl) return '';
+    // 找到原始索引以確保刪除操作正確
+    const originalIdx = currentTempPhotos.indexOf(p);
+    return `
     <div class="relative group rounded-lg overflow-hidden border border-slate-200 aspect-square bg-slate-100">
-      <img src="${sanitizeImageUrl(p.dataUrl)}" class="w-full h-full object-cover" />
-      <button onclick="removePhoto(${idx})" class="absolute top-1 right-1 bg-black/70 hover:bg-rose-600 text-white p-1 rounded-full text-[10px] transition">
+      <img src="${safeUrl}" class="w-full h-full object-cover" />
+      <button onclick="removePhoto(${originalIdx})" class="absolute top-1 right-1 bg-black/70 hover:bg-rose-600 text-white p-1 rounded-full text-[10px] transition">
         ✕
       </button>
     </div>
-  `).join("");
+  `;
+  }).join("");
 }
 
 window.removePhoto = function(index) {
@@ -1746,12 +1759,13 @@ function renderTimelineView() {
 
   container.innerHTML = logs.map(log => {
     const t = TEMPLES_DATA.find(x => x.id === log.templeId) || {};
-    const photos = templePhotosMap[log.templeId] || [];
+    const photos = (templePhotosMap[log.templeId] || []).filter(p => p.dataUrl && typeof p.dataUrl === "string" && p.dataUrl.length > 0);
 
     const photosGrid = photos.length > 0 ? `
       <div class="grid grid-cols-2 md:grid-cols-3 gap-2 mt-3">
         ${photos.map(p => {
           const safeUrl = sanitizeImageUrl(p.dataUrl);
+          if (!safeUrl) return '';
           return `
           <div class="aspect-square rounded-xl overflow-hidden border border-slate-200 bg-slate-100 shadow-sm">
             <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="block w-full h-full">
