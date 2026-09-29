@@ -509,21 +509,27 @@ async function reconcileLocalDataToCloud(user, isManual = false) {
           userRecordsMap[rec.templeId] = rec;
         }
 
-        // 體積安全檢驗：若相片總字元長度小於 680KB (安全低於 Firestore 1MB 限制)，直接將 Base64 實體寫入 Firestore 達成跨裝置無縫同步
-        const totalBase64Length = realPhotos.reduce((sum, p) => sum + (p.dataUrl?.length || 0), 0);
-        const allowDirectFirestorePhotos = totalBase64Length < 680000;
-
         const firestoreRecord = {
-          ...rec,
-          photos: realPhotos.map(p => {
+          ...rec
+        };
+
+        // 關鍵安全防護：只有當本機確實持有相片快取時，才更新雲端的 photos 陣列；
+        // 嚴格防止剛登入的手機端因本機尚無照片快取，而將雲端既有的相片覆蓋成空陣列！
+        if (realPhotos && realPhotos.length > 0) {
+          const totalBase64Length = realPhotos.reduce((sum, p) => sum + (p.dataUrl?.length || 0), 0);
+          const allowDirectFirestorePhotos = totalBase64Length < 680000;
+          firestoreRecord.photos = realPhotos.map(p => {
             if (p.dataUrl && (p.dataUrl.startsWith("http") || allowDirectFirestorePhotos)) return p;
             return {
               templeId: p.templeId,
               isLocalCache: true,
               createdAt: p.createdAt || new Date().toISOString()
             };
-          })
-        };
+          });
+        } else {
+          // 本機無相片快取，不包含 photos 欄位，由 Firestore { merge: true } 妥善保留雲端既有相片
+          delete firestoreRecord.photos;
+        }
         await withTimeout(
           Promise.all([
             fbDb.collection("users").doc(user.uid).collection("records").doc(rec.templeId).set(firestoreRecord, { merge: true }),
