@@ -2654,6 +2654,16 @@ function updatePlannerRegionSummary() {
   }
 }
 
+// 行程名稱與站點數量一致性校正函式
+function getSanitizedItineraryName(name, stopsCount) {
+  if (!name) return `朝聖巡禮 (${stopsCount}廟)`;
+  const regex = /[\(（]\s*\d+\s*廟\s*[\)）]/g;
+  if (regex.test(name)) {
+    return name.replace(regex, `(${stopsCount}廟)`);
+  }
+  return name;
+}
+
 // 開始計算最佳化路線
 window.calculateOptimizedRoute = function() {
   if (!currentUser) {
@@ -2811,6 +2821,18 @@ function renderRouteStops() {
     timeEl.textContent = h > 0 ? `約 ${h} 小時 ${m} 分` : `約 ${m} 分鐘`;
   }
 
+  // 自動同步路線名稱中的廟宇數量 (若包含括號廟宇數量格式或為空)
+  const nameInput = document.getElementById("route-name-input");
+  if (nameInput) {
+    const val = nameInput.value.trim();
+    const regex = /[\(（]\s*\d+\s*廟\s*[\)）]$/;
+    if (!val) {
+      nameInput.value = `${plannerCurrentCounty || "玄帝"}朝聖巡禮 (${plannerCalculatedRoute.length}廟)`;
+    } else if (regex.test(val)) {
+      nameInput.value = val.replace(regex, `(${plannerCalculatedRoute.length}廟)`);
+    }
+  }
+
   updateGoogleMultiNavUrl();
   if (window.lucide) lucide.createIcons();
 }
@@ -2862,7 +2884,8 @@ window.saveAndActivateRoute = async function() {
 
   if (!plannerStartPoint || plannerCalculatedRoute.length === 0) return;
 
-  const routeName = document.getElementById("route-name-input")?.value.trim() || `${plannerCurrentCounty}朝聖行程`;
+  let routeName = document.getElementById("route-name-input")?.value.trim() || `${plannerCurrentCounty}朝聖行程`;
+  routeName = getSanitizedItineraryName(routeName, plannerCalculatedRoute.length);
 
   // 1. 批次將未參拜廟宇更新為 planned
   let updatedCount = 0;
@@ -2929,6 +2952,7 @@ function activateRouteOnMap(itinerary) {
 
   const stops = itinerary.templeIds.map(id => TEMPLES_DATA.find(x => x.id === id)).filter(Boolean);
   if (stops.length === 0) return;
+  itinerary.name = getSanitizedItineraryName(itinerary.name, stops.length);
 
   // 1. 繪製折線 Polyline (金色高雅虛線)
   const latlngs = [
@@ -3027,7 +3051,7 @@ function updateRouteNavDrawer() {
   drawer.classList.remove("hidden");
   const curStop = stops[activeRouteStopIndex];
 
-  document.getElementById("drawer-route-title").textContent = activeNavItinerary.name;
+  document.getElementById("drawer-route-title").textContent = getSanitizedItineraryName(activeNavItinerary.name, stops.length);
   document.getElementById("drawer-step-index").textContent = `下一站（第 ${activeRouteStopIndex + 1} / ${stops.length} 站）`;
   document.getElementById("drawer-current-name").textContent = curStop.name;
 
@@ -3093,6 +3117,20 @@ window.checkinCurrentStop = function() {
 async function reconcilePlannedStatus() {
   try {
     const allItineraries = await db.itineraries.toArray();
+
+    // 1. 自動校正歷史行程名稱中的廟宇數量一致性
+    for (const itin of allItineraries) {
+      const stopsCount = (itin.templeIds || []).length;
+      const correctName = getSanitizedItineraryName(itin.name, stopsCount);
+      if (itin.name !== correctName) {
+        itin.name = correctName;
+        await db.itineraries.put(itin);
+        if (currentUser && fbDb) {
+          fbDb.collection("users").doc(currentUser.uid).collection("itineraries").doc(itin.id).set(itin, { merge: true }).catch(console.warn);
+        }
+      }
+    }
+
     const activePlannedTempleIds = new Set();
     allItineraries.forEach(itin => {
       if (Array.isArray(itin.templeIds)) {
@@ -3178,13 +3216,21 @@ window.openSavedItinerariesModal = async function() {
       container.innerHTML = '<p class="text-center text-slate-400 py-8 text-xs">目前尚未儲存任何規劃行程。可在規劃器運算後點擊「儲存」！</p>';
     } else {
       container.innerHTML = itineraries.map(itin => {
-        const stopsCount = itin.templeIds.length;
+        const stopsCount = (itin.templeIds || []).length;
+        const displayName = getSanitizedItineraryName(itin.name, stopsCount);
+        if (itin.name !== displayName) {
+          itin.name = displayName;
+          db.itineraries.put(itin).catch(console.warn);
+          if (currentUser && fbDb) {
+            fbDb.collection("users").doc(currentUser.uid).collection("itineraries").doc(itin.id).set(itin, { merge: true }).catch(console.warn);
+          }
+        }
         const dateStr = itin.createdAt ? new Date(itin.createdAt).toLocaleDateString("zh-TW") : "";
         return `
           <div class="p-4 bg-slate-50 hover:bg-white rounded-2xl border border-slate-200 shadow-sm transition space-y-2.5">
             <div class="flex items-start justify-between gap-2">
               <div>
-                <strong class="text-sm font-bold text-slate-800">${escapeHtml(itin.name)}</strong>
+                <strong class="text-sm font-bold text-slate-800">${escapeHtml(displayName)}</strong>
                 <p class="text-[11px] text-slate-400">建立時間：${dateStr}・共 ${stopsCount} 間廟宇</p>
               </div>
               <button onclick="deleteSavedItinerary('${itin.id}')" class="text-rose-500 hover:text-rose-700 text-xs p-1" title="刪除行程">
@@ -3219,6 +3265,8 @@ window.loadSavedItinerary = async function(id) {
   }
   const itin = await db.itineraries.get(id);
   if (!itin) return;
+  const stopsCount = (itin.templeIds || []).length;
+  itin.name = getSanitizedItineraryName(itin.name, stopsCount);
   closeSavedItinerariesModal();
   activateRouteOnMap(itin);
   switchView("map");
