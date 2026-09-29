@@ -2657,11 +2657,7 @@ function updatePlannerRegionSummary() {
 // 行程名稱與站點數量一致性校正函式
 function getSanitizedItineraryName(name, stopsCount) {
   if (!name) return `朝聖巡禮 (${stopsCount}廟)`;
-  const regex = /[\(（]\s*\d+\s*廟\s*[\)）]/g;
-  if (regex.test(name)) {
-    return name.replace(regex, `(${stopsCount}廟)`);
-  }
-  return name;
+  return name.replace(/[\(（]\s*\d+\s*廟\s*[\)）]/g, `(${stopsCount}廟)`);
 }
 
 // 開始計算最佳化路線
