@@ -509,10 +509,14 @@ async function reconcileLocalDataToCloud(user, isManual = false) {
           userRecordsMap[rec.templeId] = rec;
         }
 
+        // 體積安全檢驗：若相片總字元長度小於 680KB (安全低於 Firestore 1MB 限制)，直接將 Base64 實體寫入 Firestore 達成跨裝置無縫同步
+        const totalBase64Length = realPhotos.reduce((sum, p) => sum + (p.dataUrl?.length || 0), 0);
+        const allowDirectFirestorePhotos = totalBase64Length < 680000;
+
         const firestoreRecord = {
           ...rec,
           photos: realPhotos.map(p => {
-            if (p.dataUrl && p.dataUrl.startsWith("http")) return p;
+            if (p.dataUrl && (p.dataUrl.startsWith("http") || allowDirectFirestorePhotos)) return p;
             return {
               templeId: p.templeId,
               isLocalCache: true,
@@ -1174,7 +1178,7 @@ window.removePhoto = function(index) {
   renderModalPhotos();
 };
 
-async function compressImage(file, maxDimension = 1200, quality = 0.8) {
+async function compressImage(file, maxDimension = 900, quality = 0.72) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
@@ -1367,11 +1371,14 @@ async function saveCurrentRecord() {
       saveBtn.innerHTML = '<span class="inline-block animate-spin mr-1">☁️</span>同步雲端紀錄中...';
       setCloudStatus("syncing", "同步紀錄中...");
 
-      // 防護：過濾掉未轉成遠端 URL 的龐大 Base64，避免超過 Firestore 1MB 上限
+      // 體積安全檢驗：若整體相片體積小於 680KB (安全低於 Firestore 1MB 限制)，直接將 Base64 實體寫入 Firestore 達成跨裝置無縫同步
+      const totalBase64Length = (record.photos || []).reduce((sum, p) => sum + (p.dataUrl?.length || 0), 0);
+      const allowDirectFirestorePhotos = totalBase64Length < 680000;
+
       const firestoreRecord = {
         ...record,
         photos: (record.photos || []).map(p => {
-          if (p.dataUrl && p.dataUrl.startsWith("http")) {
+          if (p.dataUrl && (p.dataUrl.startsWith("http") || allowDirectFirestorePhotos)) {
             return p;
           }
           return {
