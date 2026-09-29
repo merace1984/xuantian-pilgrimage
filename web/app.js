@@ -344,6 +344,8 @@ function initFirebaseEngine() {
 function setCloudStatus(state, text) {
   const indicator = document.getElementById("cloud-indicator");
   const statusText = document.getElementById("cloud-status-text");
+  const settingsBadge = document.getElementById("settings-firebase-badge");
+  const settingsDesc = document.getElementById("settings-firebase-desc");
 
   if (indicator) {
     if (state === "online") {
@@ -351,10 +353,26 @@ function setCloudStatus(state, text) {
     } else if (state === "syncing") {
       indicator.className = "w-2 h-2 rounded-full bg-amber-400 animate-ping";
     } else {
-      indicator.className = "w-2 h-2 rounded-full bg-slate-400";
+      indicator.className = "w-2 h-2 rounded-full bg-rose-400";
     }
   }
   if (statusText) statusText.textContent = text;
+
+  if (settingsBadge) {
+    if (state === "online") {
+      settingsBadge.className = "text-xs px-2.5 py-1 rounded-full font-bold bg-emerald-100 text-emerald-700";
+      settingsBadge.textContent = "🟢 雲端已連線";
+    } else if (state === "syncing") {
+      settingsBadge.className = "text-xs px-2.5 py-1 rounded-full font-bold bg-amber-100 text-amber-700";
+      settingsBadge.textContent = "🟡 同步中...";
+    } else {
+      settingsBadge.className = "text-xs px-2.5 py-1 rounded-full font-bold bg-rose-100 text-rose-700";
+      settingsBadge.textContent = "🔴 離線 / 未連線";
+    }
+  }
+  if (settingsDesc && text) {
+    settingsDesc.textContent = `當前狀態：${text}。`;
+  }
 }
 
 // 使用者個人資料與規劃路線之雲端雙向即時同步
@@ -425,7 +443,99 @@ function setupUserDataSync(user) {
   } catch (err) {
     console.warn("初始化紀錄監聽失敗:", err);
   }
+
+  // 3. 自動執行本地快取與雲端庫雙向補足對齊 (防止跨裝置登入時資料脫節)
+  reconcileLocalDataToCloud(user, false);
 }
+
+// === 3.6 本地快取自動對齊並同步至雲端庫 (防止跨裝置進度落差) ===
+async function reconcileLocalDataToCloud(user, isManual = false) {
+  if (!user || !fbDb) return;
+  const syncBtn = document.getElementById("btn-force-sync");
+  if (syncBtn) {
+    syncBtn.disabled = true;
+    syncBtn.innerHTML = '<span class="inline-block animate-spin mr-1">🔄</span>同步中...';
+  }
+  setCloudStatus("syncing", "雲端對齊中...");
+
+  try {
+    const localRecords = await db.records.toArray();
+    const localItineraries = await db.itineraries.toArray();
+
+    // 1. 同步本機已參拜紀錄至雲端
+    if (localRecords.length > 0) {
+      for (const rec of localRecords) {
+        const firestoreRecord = {
+          ...rec,
+          photos: (rec.photos || []).map(p => {
+            if (p.dataUrl && p.dataUrl.startsWith("http")) return p;
+            return {
+              templeId: p.templeId,
+              isLocalCache: true,
+              createdAt: p.createdAt || new Date().toISOString()
+            };
+          })
+        };
+        await withTimeout(
+          Promise.all([
+            fbDb.collection("users").doc(user.uid).collection("records").doc(rec.templeId).set(firestoreRecord, { merge: true }),
+            fbDb.collection("pilgrimages").doc(rec.templeId).set(firestoreRecord, { merge: true })
+          ]),
+          6000,
+          "同步雲端紀錄逾時"
+        );
+      }
+    }
+
+    // 2. 同步本機規劃行程至雲端
+    if (localItineraries.length > 0) {
+      for (const itin of localItineraries) {
+        await withTimeout(
+          fbDb.collection("users").doc(user.uid).collection("itineraries").doc(itin.id).set(itin, { merge: true }),
+          5000,
+          "同步雲端行程逾時"
+        );
+      }
+    }
+
+    setCloudStatus("online", `雲端已連線 (${localRecords.length} 筆同步)`);
+    if (syncBtn) {
+      syncBtn.disabled = false;
+      syncBtn.innerHTML = '<i data-lucide="refresh-cw" class="w-4 h-4"></i> 立即強制同步';
+      if (window.lucide) lucide.createIcons();
+    }
+    if (isManual) {
+      alert(`✅ 雲端雙向同步成功！已將本機 ${localRecords.length} 筆打卡紀錄與 ${localItineraries.length} 條自訂行程完整推播至雲端庫。`);
+    }
+  } catch (err) {
+    console.warn("自動對齊雲端紀錄提醒:", err);
+    const errMsg = String(err?.message || err);
+    if (errMsg.includes("NOT_FOUND") || errMsg.includes("does not exist") || errMsg.includes("404")) {
+      setCloudStatus("offline", "資料庫未建立");
+      if (isManual) {
+        alert("⚠️ 雲端資料庫尚未在 Firebase 建立！\n\n檢測到您的 Firebase 專案中尚未建立 Cloud Firestore 資料庫。\n請依照「設定備份」頁面中的說明前往 Firebase Console 啟用 Firestore，才能跨裝置同步。");
+      }
+    } else {
+      setCloudStatus("offline", "連線延遲 (已存本地)");
+      if (isManual) {
+        alert("⚠️ 雲端同步提醒：網路連線稍有延遲或權限設定中，本機資料已安全保存。");
+      }
+    }
+    if (syncBtn) {
+      syncBtn.disabled = false;
+      syncBtn.innerHTML = '<i data-lucide="refresh-cw" class="w-4 h-4"></i> 重新嘗試同步';
+      if (window.lucide) lucide.createIcons();
+    }
+  }
+}
+
+window.forceSyncNow = function() {
+  if (!currentUser) {
+    alert("權限不足：請先登入 Google 帳號後才能進行雲端同步！");
+    return;
+  }
+  reconcileLocalDataToCloud(currentUser, true);
+};
 
 function updateAuthUI(user) {
   const btnLogin = document.getElementById("btn-login");

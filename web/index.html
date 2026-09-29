@@ -194,9 +194,9 @@
         </div>
 
         <!-- Cloud Sync Status Badge -->
-        <div id="cloud-status-badge" class="bg-white/10 px-2.5 py-1.5 rounded-xl border border-white/20 text-[11px] flex items-center gap-1.5" title="雲端同步狀態">
-          <span id="cloud-indicator" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
-          <span id="cloud-status-text" class="hidden md:inline text-slate-200">本地模式</span>
+        <div id="cloud-status-badge" onclick="switchView('settings')" class="cursor-pointer bg-white/10 hover:bg-white/20 transition px-2.5 py-1.5 rounded-xl border border-white/20 text-[11px] flex items-center gap-1.5 select-none" title="點擊檢視雲端同步與對齊狀態">
+          <span id="cloud-indicator" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0"></span>
+          <span id="cloud-status-text" class="text-slate-200 truncate max-w-[90px] sm:max-w-none">本地快取</span>
         </div>
 
         <!-- User Profile (已登入時呈現於右上角) -->
@@ -876,6 +876,25 @@
             <p><strong>💡 如何啟用 Firebase 雲端同步：</strong></p>
             <p>1. 開啟 <code>private/config/firebase-config.js</code>，填入您在 Firebase Console 取得之專案設定並上傳至網站根目錄。</p>
             <p>2. 於 Firebase Console 啟用 <strong>Authentication (Google 登入)</strong>、<strong>Firestore</strong> 與 <strong>Storage</strong>。</p>
+          </div>
+        </div>
+
+        <!-- Manual Cloud Reconcile Card -->
+        <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 space-y-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h4 class="font-bold text-slate-800 flex items-center gap-1.5 text-base">
+                <i data-lucide="refresh-cw" class="w-5 h-5 text-brand-600"></i>
+                <span>立即雙向強制同步</span>
+                <span class="text-[10px] bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full">跨裝置對齊</span>
+              </h4>
+              <p class="text-xs text-slate-500 mt-1">
+                將本機所有已打卡足跡、心得筆記與自訂規劃行程一次性推播至雲端庫，解決手機與桌機紀錄不同步的問題。
+              </p>
+            </div>
+            <button id="btn-force-sync" onclick="forceSyncNow()" class="self-start sm:self-auto px-4 py-2.5 bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold rounded-xl shadow transition flex items-center gap-1.5 shrink-0">
+              <i data-lucide="refresh-cw" class="w-4 h-4"></i> 立即強制同步
+            </button>
           </div>
         </div>
 
