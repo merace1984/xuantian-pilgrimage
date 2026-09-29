@@ -462,12 +462,56 @@ async function reconcileLocalDataToCloud(user, isManual = false) {
     const localRecords = await db.records.toArray();
     const localItineraries = await db.itineraries.toArray();
 
-    // 1. 同步本機已參拜紀錄至雲端
+    // 1. 同步本機已參拜紀錄與相片至雲端
     if (localRecords.length > 0) {
       for (const rec of localRecords) {
+        // 從本機 db.photos 獲取該廟宇完整相片快取 (含 Base64)
+        const realPhotos = await db.photos.where("templeId").equals(rec.templeId).toArray();
+        let photosUpdated = false;
+
+        // 若啟用 Cloud Storage，嘗試將尚未上傳的 Base64 相片上傳轉成永久 URL
+        if (fbStorage && realPhotos.length > 0) {
+          for (let i = 0; i < realPhotos.length; i++) {
+            const p = realPhotos[i];
+            if (p.dataUrl && !p.dataUrl.startsWith("http") && p.dataUrl.startsWith("data:image/")) {
+              try {
+                const blob = dataURLtoBlob(p.dataUrl);
+                if (blob) {
+                  const fileName = `photo_${Date.now()}_${i}.webp`;
+                  const storageRef = fbStorage.ref(`photos/${rec.templeId}/${fileName}`);
+                  await withTimeout(
+                    storageRef.put(blob, { contentType: blob.type || "image/webp" }),
+                    8000,
+                    "相片雲端上傳逾時"
+                  );
+                  const downloadUrl = await withTimeout(
+                    storageRef.getDownloadURL(),
+                    5000,
+                    "取得相片下載網址逾時"
+                  );
+                  p.dataUrl = downloadUrl;
+                  photosUpdated = true;
+                }
+              } catch (upErr) {
+                console.warn(`同步上傳相片第 ${i + 1} 張略過:`, upErr);
+              }
+            }
+          }
+        }
+
+        // 若有相片成功轉為雲端 URL，同步更新本機資料庫
+        if (photosUpdated) {
+          await db.photos.where("templeId").equals(rec.templeId).delete();
+          await db.photos.bulkAdd(realPhotos);
+          templePhotosMap[rec.templeId] = realPhotos;
+          rec.photos = realPhotos;
+          await db.records.put(rec);
+          userRecordsMap[rec.templeId] = rec;
+        }
+
         const firestoreRecord = {
           ...rec,
-          photos: (rec.photos || []).map(p => {
+          photos: realPhotos.map(p => {
             if (p.dataUrl && p.dataUrl.startsWith("http")) return p;
             return {
               templeId: p.templeId,
