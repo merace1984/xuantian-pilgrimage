@@ -168,6 +168,25 @@
       color: #0f172a !important;
       transform: scale(1.05);
     }
+
+    /* Native Modal Lightbox & Scroll Containment */
+    dialog:modal {
+      overscroll-behavior: contain;
+    }
+    dialog::backdrop {
+      overflow: hidden;
+      overscroll-behavior: contain;
+    }
+    #photo-lightbox-dialog[open] {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    #photo-lightbox-dialog::backdrop {
+      background: rgba(15, 23, 42, 0.9);
+      backdrop-filter: blur(4px);
+    }
   </style>
 </head>
 <body class="bg-slate-50 text-slate-800 antialiased flex flex-col h-full overflow-hidden">
@@ -1147,8 +1166,45 @@
     </div>
   </div>
 
-  <script src="temples_data.js?v=20260929_1435"></script>
-  <script src="firebase-config.js?v=20260929_1435"></script>
-  <script src="app.js?v=20260929_1435"></script>
+  <!-- Native Dialog: 全螢幕高畫質照片燈箱 (Lightbox) -->
+  <dialog id="photo-lightbox-dialog" closedby="any" aria-labelledby="lightbox-caption" class="m-auto p-0 bg-transparent border-0 max-w-[94vw] max-h-[92dvh] w-fit overflow-visible focus:outline-none">
+    <div class="bg-slate-950/95 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-w-[94vw] max-h-[92dvh] text-white">
+      <div class="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-slate-800/80 bg-slate-900/90 shrink-0">
+        <div class="min-w-0">
+          <h3 id="lightbox-caption" class="text-sm font-bold text-slate-100 truncate">參拜照片</h3>
+          <p id="lightbox-meta" class="text-[11px] text-slate-400">1 / 1</p>
+        </div>
+        <div class="flex items-center gap-1.5 shrink-0">
+          <button type="button" id="lightbox-btn-zoom" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1 transition" title="切換完整比例 / 原始像素大小檢視">
+            <i data-lucide="zoom-in" class="w-3.5 h-3.5"></i>
+            <span id="lightbox-zoom-label">放大檢視</span>
+          </button>
+          <a id="lightbox-btn-download" href="#" download="pilgrimage-photo.webp" rel="noopener noreferrer" aria-label="下載照片" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 transition" title="下載照片">
+            <i data-lucide="download" class="w-4 h-4"></i>
+          </a>
+          <form method="dialog" class="inline-flex">
+            <button type="submit" autofocus aria-label="關閉照片檢視" class="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-600 text-slate-200 hover:text-white transition" title="關閉 (Esc)">
+              <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <div id="lightbox-stage" class="relative flex items-center justify-center bg-black/90 overflow-auto max-h-[78dvh] min-h-[240px] min-w-[260px] sm:min-w-[420px]">
+        <img id="lightbox-img" src="" alt="參拜完整大圖" class="max-w-[90vw] max-h-[76dvh] w-auto h-auto object-contain select-none transition-all duration-200 cursor-zoom-in" />
+
+        <button type="button" id="lightbox-btn-prev" aria-label="上一張照片" class="hidden absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/65 hover:bg-black/90 text-white border border-white/20 flex items-center justify-center shadow-lg transition">
+          <i data-lucide="chevron-left" class="w-5 h-5"></i>
+        </button>
+        <button type="button" id="lightbox-btn-next" aria-label="下一張照片" class="hidden absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/65 hover:bg-black/90 text-white border border-white/20 flex items-center justify-center shadow-lg transition">
+          <i data-lucide="chevron-right" class="w-5 h-5"></i>
+        </button>
+      </div>
+    </div>
+  </dialog>
+
+  <script src="temples_data.js?v=20261116_1540"></script>
+  <script src="firebase-config.js?v=20261116_1540"></script>
+  <script src="app.js?v=20261116_1540"></script>
 </body>
 </html>

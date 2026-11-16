@@ -130,6 +130,225 @@ function sanitizeImageUrl(url) {
   return "";
 }
 
+/**
+ * 過濾並驗證照片清單，確保縮圖列表與燈箱索引 100% 同步一致
+ */
+function getValidPhotos(rawPhotos) {
+  if (!Array.isArray(rawPhotos)) return [];
+  const valid = [];
+  rawPhotos.forEach((p, rawIndex) => {
+    if (!p || typeof p.dataUrl !== "string" || p.dataUrl.length === 0) return;
+    const safeUrl = sanitizeImageUrl(p.dataUrl);
+    if (!safeUrl) return;
+    valid.push({ ...p, safeUrl, rawIndex });
+  });
+  return valid;
+}
+
+/**
+ * 統一產生可點擊開啟大圖燈箱的相片縮圖卡片
+ */
+function renderPhotoThumbCard(photo, templeId, validIdx, source, extraHtml = "", wrapperClass = "aspect-square rounded-xl overflow-hidden border border-slate-200 bg-slate-100 shadow-sm") {
+  const safeTid = escapeHtml(String(templeId || ""));
+  const safeSource = escapeHtml(source);
+  return `
+    <div class="relative group ${wrapperClass}">
+      <button type="button"
+              data-lightbox-temple="${safeTid}"
+              data-lightbox-index="${validIdx}"
+              data-lightbox-source="${safeSource}"
+              aria-label="放大檢視第 ${validIdx + 1} 張參拜照片"
+              class="block w-full h-full p-0 border-0 bg-transparent cursor-pointer focus-visible:outline-2 focus-visible:outline-brand-gold">
+        <img src="${photo.safeUrl}" loading="lazy" class="w-full h-full object-cover hover:scale-105 transition duration-300" alt="參拜照片 ${validIdx + 1}" />
+      </button>
+      ${extraHtml}
+    </div>
+  `;
+}
+
+// === 3.6 全螢幕照片大圖燈箱 (Native Dialog Lightbox) ===
+const lightboxState = {
+  photos: [],
+  index: 0,
+  title: "",
+  zoomed: false
+};
+
+function getPhotoExtension(safeUrl) {
+  if (safeUrl.startsWith("data:image/png")) return "png";
+  if (safeUrl.startsWith("data:image/jpeg") || safeUrl.startsWith("data:image/jpg")) return "jpg";
+  return "webp";
+}
+
+function applyLightboxZoomStyle(imgEl, stageEl, zoomed) {
+  if (!imgEl || !stageEl) return;
+  const labelEl = document.getElementById("lightbox-zoom-label");
+  if (zoomed) {
+    // 切換為 block 容器，避免 Flexbox center 溢出時左側與上方無法捲動
+    stageEl.classList.remove("flex", "items-center", "justify-center");
+    stageEl.classList.add("block");
+    const fitWidth = imgEl.clientWidth || 0;
+    const targetWidth = Math.max(imgEl.naturalWidth || 0, Math.round(fitWidth * 1.5));
+    imgEl.className = "block mx-auto max-w-none max-h-none select-none cursor-zoom-out";
+    if (targetWidth > 0) imgEl.style.width = `${targetWidth}px`;
+    imgEl.style.height = "auto";
+    if (labelEl) labelEl.textContent = "縮小還原";
+  } else {
+    stageEl.classList.remove("block");
+    stageEl.classList.add("flex", "items-center", "justify-center");
+    imgEl.className = "max-w-[90vw] max-h-[76dvh] w-auto h-auto object-contain select-none transition-all duration-200 cursor-zoom-in";
+    imgEl.style.width = "";
+    imgEl.style.height = "";
+    if (labelEl) labelEl.textContent = "放大檢視";
+  }
+}
+
+function updateLightboxView() {
+  const imgEl = document.getElementById("lightbox-img");
+  const stageEl = document.getElementById("lightbox-stage");
+  const captionEl = document.getElementById("lightbox-caption");
+  const metaEl = document.getElementById("lightbox-meta");
+  const prevBtn = document.getElementById("lightbox-btn-prev");
+  const nextBtn = document.getElementById("lightbox-btn-next");
+  const downloadBtn = document.getElementById("lightbox-btn-download");
+  const current = lightboxState.photos[lightboxState.index];
+  if (!current || !imgEl) return;
+
+  const total = lightboxState.photos.length;
+  const idxText = `第 ${lightboxState.index + 1} / ${total} 張`;
+  lightboxState.zoomed = false;
+  applyLightboxZoomStyle(imgEl, stageEl, false);
+
+  if (captionEl) captionEl.textContent = lightboxState.title || "參拜照片";
+  if (metaEl) metaEl.textContent = idxText;
+
+  imgEl.onload = () => {
+    if (metaEl && imgEl.naturalWidth && imgEl.naturalHeight) {
+      metaEl.textContent = `${idxText} · ${imgEl.naturalWidth} × ${imgEl.naturalHeight} px`;
+    }
+  };
+  imgEl.src = current.safeUrl;
+
+  if (prevBtn) prevBtn.classList.toggle("hidden", total <= 1);
+  if (nextBtn) nextBtn.classList.toggle("hidden", total <= 1);
+
+  if (downloadBtn) {
+    const ext = getPhotoExtension(current.safeUrl);
+    const baseName = (lightboxState.title || "參拜照片").replace(/[\\/:*?"<>|]/g, "_");
+    downloadBtn.href = current.safeUrl;
+    downloadBtn.download = `${baseName}_${lightboxState.index + 1}.${ext}`;
+    if (current.safeUrl.startsWith("https://")) {
+      downloadBtn.target = "_blank";
+    } else {
+      downloadBtn.removeAttribute("target");
+    }
+  }
+}
+
+function stepLightbox(delta) {
+  const total = lightboxState.photos.length;
+  if (total <= 1) return;
+  lightboxState.index = (lightboxState.index + delta + total) % total;
+  updateLightboxView();
+}
+
+function toggleLightboxZoom() {
+  const imgEl = document.getElementById("lightbox-img");
+  const stageEl = document.getElementById("lightbox-stage");
+  if (!imgEl || !imgEl.src) return;
+  lightboxState.zoomed = !lightboxState.zoomed;
+  applyLightboxZoomStyle(imgEl, stageEl, lightboxState.zoomed);
+}
+
+function openPhotoLightbox(templeId, photoIndex = 0, source = "saved") {
+  const dialog = document.getElementById("photo-lightbox-dialog");
+  if (!dialog) return;
+
+  const rawList = source === "temp" ? currentTempPhotos : (templePhotosMap[templeId] || []);
+  const validPhotos = getValidPhotos(rawList);
+  if (validPhotos.length === 0) return;
+
+  const temple = TEMPLES_DATA.find(x => x.id === templeId);
+  lightboxState.photos = validPhotos;
+  lightboxState.index = Math.max(0, Math.min(Number(photoIndex) || 0, validPhotos.length - 1));
+  lightboxState.title = temple?.name || currentActiveTemple?.name || "參拜照片";
+
+  updateLightboxView();
+  if (!dialog.open) dialog.showModal();
+  if (window.lucide) lucide.createIcons();
+}
+
+function initPhotoLightbox() {
+  const dialog = document.getElementById("photo-lightbox-dialog");
+  if (!dialog) return;
+
+  // 透過事件委派處理所有照片縮圖點擊，避免在 HTML 內拼裝內聯字串
+  document.addEventListener("click", (e) => {
+    const trigger = e.target.closest("[data-lightbox-temple]");
+    if (!trigger) return;
+    const tid = trigger.getAttribute("data-lightbox-temple");
+    const idx = parseInt(trigger.getAttribute("data-lightbox-index") || "0", 10);
+    const source = trigger.getAttribute("data-lightbox-source") || "saved";
+    openPhotoLightbox(tid, idx, source);
+  });
+
+  // Safari 等尚未支援 <dialog closedby="any"> 瀏覽器之點擊外部遮罩關閉備援
+  if (!("closedBy" in HTMLDialogElement.prototype)) {
+    const outside = (e, dlg) => {
+      const r = dlg.getBoundingClientRect();
+      return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+    };
+    let pressedOutside = false;
+    dialog.addEventListener("pointerdown", (e) => { pressedOutside = outside(e, dialog); });
+    dialog.addEventListener("pointerup", (e) => { if (pressedOutside && outside(e, dialog)) dialog.close(); });
+  }
+
+  dialog.addEventListener("close", () => {
+    lightboxState.zoomed = false;
+    const imgEl = document.getElementById("lightbox-img");
+    const stageEl = document.getElementById("lightbox-stage");
+    applyLightboxZoomStyle(imgEl, stageEl, false);
+    if (imgEl) imgEl.src = "";
+  });
+
+  document.getElementById("lightbox-btn-prev")?.addEventListener("click", () => stepLightbox(-1));
+  document.getElementById("lightbox-btn-next")?.addEventListener("click", () => stepLightbox(1));
+  document.getElementById("lightbox-btn-zoom")?.addEventListener("click", toggleLightboxZoom);
+  document.getElementById("lightbox-img")?.addEventListener("click", toggleLightboxZoom);
+
+  // 鍵盤左右方向鍵切換照片 (Esc 由原生 <dialog> 自動處理)
+  document.addEventListener("keydown", (e) => {
+    if (!dialog.open) return;
+    if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      stepLightbox(-1);
+    } else if (e.key === "ArrowRight") {
+      e.preventDefault();
+      stepLightbox(1);
+    }
+  });
+
+  // 行動裝置未放大時支援左右滑動切換相片
+  const stageEl = document.getElementById("lightbox-stage");
+  if (stageEl) {
+    let touchStartX = 0;
+    let touchStartY = 0;
+    stageEl.addEventListener("touchstart", (e) => {
+      if (lightboxState.zoomed || e.touches.length !== 1) return;
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+    }, { passive: true });
+    stageEl.addEventListener("touchend", (e) => {
+      if (lightboxState.zoomed || e.changedTouches.length !== 1) return;
+      const dx = e.changedTouches[0].clientX - touchStartX;
+      const dy = e.changedTouches[0].clientY - touchStartY;
+      if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy)) {
+        stepLightbox(dx > 0 ? -1 : 1);
+      }
+    }, { passive: true });
+  }
+}
+
 // === 4. 本地資料庫載入 (Local-First) ===
 async function loadUserDataFromLocal() {
   try {
@@ -1102,19 +1321,11 @@ window.openTempleModal = async function(templeId) {
         }
 
         if (photosEl) {
-          const validVisiblePhotos = currentTempPhotos.filter(p => p.dataUrl && typeof p.dataUrl === "string" && p.dataUrl.length > 0);
+          const validVisiblePhotos = getValidPhotos(currentTempPhotos);
           if (validVisiblePhotos.length > 0) {
-            photosEl.innerHTML = validVisiblePhotos.map(p => {
-              const safeUrl = sanitizeImageUrl(p.dataUrl);
-              if (!safeUrl) return '';
-              return `
-                <div class="aspect-square rounded-xl overflow-hidden border border-slate-200 bg-slate-100 shadow-sm">
-                  <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="block w-full h-full">
-                    <img src="${safeUrl}" class="w-full h-full object-cover hover:scale-105 transition duration-300" alt="相片" />
-                  </a>
-                </div>
-              `;
-            }).join("");
+            photosEl.innerHTML = validVisiblePhotos
+              .map((p, idx) => renderPhotoThumbCard(p, t.id, idx, "temp"))
+              .join("");
           } else {
             photosEl.innerHTML = '<p class="col-span-3 text-center text-xs text-slate-400 py-2">無現場相片</p>';
           }
@@ -1156,26 +1367,21 @@ function renderModalPhotos() {
   const container = document.getElementById("photos-container");
   if (!container) return;
 
-  const validPhotos = currentTempPhotos.filter(p => p.dataUrl && typeof p.dataUrl === "string" && p.dataUrl.length > 0);
+  const validPhotos = getValidPhotos(currentTempPhotos);
 
   if (validPhotos.length === 0) {
     container.innerHTML = '<p id="no-photos-hint" class="col-span-3 text-center text-xs text-slate-400 py-4">尚未上傳照片</p>';
     return;
   }
 
+  const tid = currentActiveTemple?.id || "";
   container.innerHTML = validPhotos.map((p, idx) => {
-    const safeUrl = sanitizeImageUrl(p.dataUrl);
-    if (!safeUrl) return '';
-    // 找到原始索引以確保刪除操作正確
-    const originalIdx = currentTempPhotos.indexOf(p);
-    return `
-    <div class="relative group rounded-lg overflow-hidden border border-slate-200 aspect-square bg-slate-100">
-      <img src="${safeUrl}" class="w-full h-full object-cover" />
-      <button onclick="removePhoto(${originalIdx})" class="absolute top-1 right-1 bg-black/70 hover:bg-rose-600 text-white p-1 rounded-full text-[10px] transition">
+    const deleteBtn = `
+      <button type="button" onclick="removePhoto(${p.rawIndex})" aria-label="移除這張照片" class="absolute top-1 right-1 bg-black/70 hover:bg-rose-600 text-white p-1 rounded-full text-[10px] transition z-10">
         ✕
       </button>
-    </div>
-  `;
+    `;
+    return renderPhotoThumbCard(p, tid, idx, "temp", deleteBtn, "rounded-lg overflow-hidden border border-slate-200 aspect-square bg-slate-100");
   }).join("");
 }
 
@@ -1938,20 +2144,11 @@ function renderTimelineView() {
 
   container.innerHTML = logs.map(log => {
     const t = TEMPLES_DATA.find(x => x.id === log.templeId) || {};
-    const photos = (templePhotosMap[log.templeId] || []).filter(p => p.dataUrl && typeof p.dataUrl === "string" && p.dataUrl.length > 0);
+    const photos = getValidPhotos(templePhotosMap[log.templeId]);
 
     const photosGrid = photos.length > 0 ? `
       <div class="grid grid-cols-2 md:grid-cols-3 gap-2 mt-3">
-        ${photos.map(p => {
-          const safeUrl = sanitizeImageUrl(p.dataUrl);
-          if (!safeUrl) return '';
-          return `
-          <div class="aspect-square rounded-xl overflow-hidden border border-slate-200 bg-slate-100 shadow-sm">
-            <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="block w-full h-full">
-              <img src="${safeUrl}" class="w-full h-full object-cover hover:scale-105 transition duration-300 cursor-pointer" alt="參拜照片" />
-            </a>
-          </div>
-        `}).join("")}
+        ${photos.map((p, idx) => renderPhotoThumbCard(p, log.templeId, idx, "saved")).join("")}
       </div>
     ` : '';
 
@@ -2002,6 +2199,8 @@ function renderAllViews() {
 
 // === 10. 事件監聽綁定 ===
 function bindEvents() {
+  initPhotoLightbox();
+
   document.getElementById("filter-county")?.addEventListener("change", () => {
     renderMapMarkers();
     const c = document.getElementById("filter-county").value;
