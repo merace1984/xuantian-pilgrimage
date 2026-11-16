@@ -978,6 +978,15 @@ function initMap() {
   map.addLayer(markersCluster);
   renderMapMarkers();
 
+  // 待動態樣式套用後重算 Popup 位置與對齊，避免卡片錯位或偏移
+  map.on("popupopen", (e) => {
+    requestAnimationFrame(() => {
+      if (e.popup && e.popup.isOpen()) {
+        e.popup.update();
+      }
+    });
+  });
+
   setTimeout(() => map.invalidateSize(), 50);
   setTimeout(() => map.invalidateSize(), 250);
   setTimeout(() => map.invalidateSize(), 600);
@@ -1062,10 +1071,10 @@ function renderMapMarkers() {
                         '<span class="inline-flex items-center gap-1 text-zinc-300 bg-zinc-800 border border-zinc-700 font-bold px-2 py-0.5 rounded-full text-[11px]">⚫ 未參拜</span>';
 
     const popupHtml = `
-      <div class="text-xs space-y-2.5 font-sans w-[280px] sm:w-[310px] select-text">
+      <div class="temple-popup-card text-xs space-y-2.5 font-sans select-text">
         <!-- 頂部標題列：廟名享有完整空間，右側預留 pr-8 避讓關閉按鈕 -->
         <div class="pr-8">
-          <strong class="text-[15px] font-bold text-zinc-50 leading-snug tracking-tight block">${escapeHtml(t.name)}</strong>
+          <strong class="text-[15px] font-bold text-zinc-50 leading-snug tracking-tight block break-words">${escapeHtml(t.name)}</strong>
         </div>
 
         <!-- 狀態與縣市行政區列：徹底垂直分離於關閉按鈕下方，完全避免重疊與誤觸 -->
@@ -1078,19 +1087,19 @@ function renderMapMarkers() {
         </div>
 
         <!-- 地址欄位：卡片化深底色與圖示襯托，完整清晰折行 -->
-        <div class="text-[12px] text-zinc-300 leading-relaxed break-words bg-zinc-900 px-2.5 py-1.5 rounded-lg border border-zinc-800 flex items-start gap-1.5">
+        <div class="text-[12px] text-zinc-300 leading-relaxed bg-zinc-900 px-2.5 py-1.5 rounded-lg border border-zinc-800 flex items-start gap-1.5 min-w-0 w-full box-border">
           <span class="shrink-0 text-red-400 mt-0.5">📍</span>
-          <span>${escapeHtml(t.address || "無詳細地址紀錄")}</span>
+          <span class="min-w-0 break-words">${escapeHtml(t.address || "無詳細地址紀錄")}</span>
         </div>
 
         <!-- 操作按鈕列：擴大觸控面積與圓角質感 -->
-        <div class="flex gap-2 pt-1">
+        <div class="flex gap-2 pt-1 w-full">
           <a href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(t.lat)},${encodeURIComponent(t.lon)}" target="_blank"
-             class="flex-1 text-center py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 active:scale-95 text-zinc-100 rounded-xl font-bold text-xs shadow-sm transition flex items-center justify-center gap-1">
+             class="flex-1 min-w-0 text-center py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 active:scale-95 text-zinc-100 rounded-xl font-bold text-xs shadow-sm transition flex items-center justify-center gap-1">
             <span>導航</span>
           </a>
           <button onclick="openTempleModal('${escapeHtml(t.id)}')"
-             class="flex-1 py-2 bg-red-700 hover:bg-red-600 active:scale-95 text-white rounded-xl font-bold text-xs shadow-sm transition flex items-center justify-center gap-1">
+             class="flex-1 min-w-0 py-2 bg-red-700 hover:bg-red-600 active:scale-95 text-white rounded-xl font-bold text-xs shadow-sm transition flex items-center justify-center gap-1">
             <span>打卡記事</span>
           </button>
         </div>
@@ -1098,8 +1107,8 @@ function renderMapMarkers() {
     `;
 
     marker.bindPopup(popupHtml, {
-      minWidth: 280,
-      maxWidth: 350,
+      minWidth: 220,
+      maxWidth: 340,
       autoPanPadding: [30, 30]
     });
     markersCluster.addLayer(marker);
@@ -3187,15 +3196,19 @@ function activateRouteOnMap(itinerary) {
     });
     const m = L.marker([t.lat, t.lon], { icon: numIcon, zIndexOffset: 1000 + idx });
     m.bindPopup(`
-      <div class="text-xs p-1 space-y-1.5">
-        <strong class="text-sm font-bold text-zinc-50 block pr-6">第 ${idx + 1} 站：${escapeHtml(t.name)}</strong>
+      <div class="temple-popup-card text-xs space-y-2 font-sans select-text">
+        <strong class="text-sm font-bold text-zinc-50 block pr-8 break-words">第 ${idx + 1} 站：${escapeHtml(t.name)}</strong>
         <p class="text-zinc-400">${escapeHtml(t.county)} ${escapeHtml(t.district)}</p>
-        <div class="flex gap-1.5 pt-1">
-          <a href="https://www.google.com/maps/dir/?api=1&destination=${t.lat},${t.lon}" target="_blank" class="flex-1 text-center py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-100 rounded-lg font-bold">導航前往</a>
-          <button onclick="openTempleModal('${t.id}')" class="flex-1 py-1.5 bg-red-700 hover:bg-red-600 text-white rounded-lg font-bold">打卡記事</button>
+        <div class="flex gap-2 pt-1 w-full">
+          <a href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(t.lat)},${encodeURIComponent(t.lon)}" target="_blank" class="flex-1 min-w-0 text-center py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-100 rounded-lg font-bold">導航前往</a>
+          <button onclick="openTempleModal('${escapeHtml(String(t.id))}')" class="flex-1 min-w-0 py-1.5 bg-red-700 hover:bg-red-600 text-white rounded-lg font-bold">打卡記事</button>
         </div>
       </div>
-    `);
+    `, {
+      minWidth: 220,
+      maxWidth: 340,
+      autoPanPadding: [30, 30]
+    });
     m.addTo(map);
     activeRouteMarkers.push(m);
   });
