@@ -238,6 +238,15 @@
       background: rgba(9, 9, 11, 0.92);
       backdrop-filter: blur(4px);
     }
+    #temple-editor-dialog[open] {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #temple-editor-dialog::backdrop {
+      background: rgba(9, 9, 11, 0.84);
+      backdrop-filter: blur(4px);
+    }
 
     /* Forced Colors Mode Accessibility */
     @media (forced-colors: active) {
@@ -262,7 +271,7 @@
         <div>
           <h1 class="font-bold text-lg leading-tight tracking-wide flex items-center gap-2 text-zinc-50">
             參拜足跡
-            <span class="text-xs bg-red-950/90 text-red-300 border border-red-800/70 px-2 py-0.5 rounded-full font-normal">全台 732 廟</span>
+            <span class="text-xs bg-red-950/90 text-red-300 border border-red-800/70 px-2 py-0.5 rounded-full font-normal">全台 <span id="header-total-temples">732</span> 廟</span>
           </h1>
           <p class="text-xs text-zinc-400">朝聖地圖・雲端同步・圖文記事</p>
         </div>
@@ -273,7 +282,7 @@
         <!-- Quick Visited Count -->
         <div id="stat-badge" class="hidden sm:flex bg-zinc-900 px-3 py-1.5 rounded-xl border border-zinc-800 text-xs items-center gap-2 text-zinc-200">
           <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400"></i>
-          <span>已參拜: <strong id="header-visited-count" class="text-emerald-400 font-bold">0</strong> / 732 (<span id="header-percent" class="text-red-300 font-semibold">0%</span>)</span>
+          <span>已參拜: <strong id="header-visited-count" class="text-emerald-400 font-bold">0</strong> / <span id="header-total-count">732</span> (<span id="header-percent" class="text-red-300 font-semibold">0%</span>)</span>
         </div>
 
         <!-- Cloud Sync Status Badge -->
@@ -351,15 +360,19 @@
           </select>
         </div>
 
-        <div class="flex items-center justify-between text-[11px] text-zinc-400 pt-1 border-t border-zinc-800 px-1">
-          <span>符合條件：<strong id="filtered-count" class="text-red-400 font-bold">732</strong> 間</span>
-          <div class="flex items-center gap-2">
+        <div class="flex items-center justify-between text-[11px] text-zinc-400 pt-1 border-t border-zinc-800 px-1 gap-1.5 flex-wrap">
+          <span>符合：<strong id="filtered-count" class="text-red-400 font-bold">732</strong> 間</span>
+          <div class="flex items-center gap-1.5">
+            <button type="button" id="btn-add-temple-map" onclick="openTempleEditorModal()" class="hidden text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-red-300 font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 transition" title="新增寺廟基本資料">
+              <i data-lucide="plus" class="w-3 h-3"></i>
+              <span>新增廟宇</span>
+            </button>
             <button type="button" onclick="switchView('planner')" class="text-xs bg-red-700 hover:bg-red-600 active:scale-95 text-white font-bold px-2.5 py-0.5 rounded-lg flex items-center gap-1 shadow-sm transition">
               <i data-lucide="route" class="w-3.5 h-3.5"></i>
               <span>路線規劃</span>
             </button>
             <span class="text-red-300 font-medium cursor-pointer hover:underline" onclick="switchCounty('臺南市')">
-              📍 台南 96 廟
+              📍 台南
             </span>
           </div>
         </div>
@@ -689,9 +702,15 @@
             </h2>
             <p class="text-xs text-zinc-400 mt-0.5">提供依縣市、鄉鎮市區、參拜狀態及關鍵字交叉多重篩選</p>
           </div>
-          <span id="list-total-badge" class="self-start sm:self-auto text-xs bg-red-950/80 text-red-300 border border-red-800/70 px-3 py-1 rounded-full font-bold">
-            顯示 732 / 732 間
-          </span>
+          <div class="flex items-center gap-2 self-start sm:self-auto">
+            <button type="button" id="btn-add-temple-list" onclick="openTempleEditorModal()" class="hidden px-3.5 py-1.5 bg-red-700 hover:bg-red-600 text-white text-xs font-bold rounded-xl shadow transition flex items-center gap-1.5">
+              <i data-lucide="plus-circle" class="w-4 h-4"></i>
+              <span>新增寺廟</span>
+            </button>
+            <span id="list-total-badge" class="text-xs bg-red-950/80 text-red-300 border border-red-800/70 px-3 py-1 rounded-full font-bold">
+              顯示 732 / 732 間
+            </span>
+          </div>
         </div>
 
         <!-- 篩選器控制面板 -->
@@ -1049,18 +1068,24 @@
   <!-- Modal: Temple Detail & Check-in / Notes -->
   <div id="temple-modal" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm hidden flex items-end md:items-center justify-center p-0 md:p-4 transition-all">
     <div class="bg-zinc-900 text-zinc-100 border border-zinc-800 w-full max-w-xl max-h-[90vh] rounded-t-3xl md:rounded-3xl shadow-2xl overflow-hidden flex flex-col">
-      <div class="p-5 border-b border-zinc-800 flex items-start justify-between bg-zinc-950/90">
-        <div>
-          <div class="flex items-center gap-2">
+      <div class="p-5 border-b border-zinc-800 flex items-start justify-between gap-2 bg-zinc-950/90">
+        <div class="min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
             <span id="modal-county-district" class="text-xs bg-red-950/90 text-red-300 border border-red-800/70 font-semibold px-2 py-0.5 rounded-md"></span>
             <span id="modal-status-badge" class="text-xs font-semibold px-2 py-0.5 rounded-md"></span>
           </div>
-          <h3 id="modal-title" class="font-extrabold text-2xl text-zinc-50 mt-1"></h3>
-          <p id="modal-address" class="text-xs text-zinc-400 mt-0.5 flex items-center gap-1"></p>
+          <h3 id="modal-title" class="font-extrabold text-2xl text-zinc-50 mt-1 break-words"></h3>
+          <p id="modal-address" class="text-xs text-zinc-400 mt-0.5 flex items-center gap-1 break-words"></p>
         </div>
-        <button id="modal-close" class="p-2 text-zinc-400 hover:text-zinc-100 rounded-full hover:bg-zinc-800 transition">
-          <i data-lucide="x" class="w-6 h-6"></i>
-        </button>
+        <div class="flex items-center gap-1.5 shrink-0">
+          <button type="button" id="btn-edit-temple-info" onclick="openTempleEditorModal(currentActiveTemple?.id)" class="hidden text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-red-300 font-bold px-2.5 py-1.5 rounded-xl flex items-center gap-1 transition" title="修改或刪除此寺廟基本資料">
+            <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+            <span>編輯廟資</span>
+          </button>
+          <button id="modal-close" class="p-2 text-zinc-400 hover:text-zinc-100 rounded-full hover:bg-zinc-800 transition">
+            <i data-lucide="x" class="w-6 h-6"></i>
+          </button>
+        </div>
       </div>
 
       <div class="flex-1 overflow-y-auto p-5 space-y-5">
@@ -1264,8 +1289,112 @@
     </div>
   </dialog>
 
-  <script src="temples_data.js?v=20261116_1605"></script>
-  <script src="firebase-config.js?v=20261116_1605"></script>
-  <script src="app.js?v=20261116_1605"></script>
+  <!-- Native Dialog: 寺廟基本資料新增 / 編輯 / 刪除視窗 -->
+  <dialog id="temple-editor-dialog" aria-labelledby="temple-editor-title" class="m-auto p-4 bg-transparent border-0 max-w-xl w-full max-h-[92dvh] overflow-visible focus:outline-none">
+    <form id="temple-editor-form" class="bg-zinc-900 text-zinc-100 border border-zinc-800 w-full max-h-[88dvh] rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+      <div class="p-5 border-b border-zinc-800 flex items-center justify-between bg-zinc-950/90 shrink-0">
+        <div>
+          <span id="temple-editor-mode-badge" class="text-[11px] bg-red-950/90 text-red-300 border border-red-800/70 font-bold px-2 py-0.5 rounded-md">管理員模式</span>
+          <h3 id="temple-editor-title" class="font-extrabold text-lg text-zinc-50 mt-1">編輯寺廟基本資料</h3>
+        </div>
+        <button type="button" id="btn-close-temple-editor" aria-label="關閉編輯視窗" class="p-2 text-zinc-400 hover:text-zinc-100 rounded-full hover:bg-zinc-800 transition">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="flex-1 overflow-y-auto p-5 space-y-4 text-xs">
+        <input type="hidden" id="editor-temple-id" value="" />
+
+        <div>
+          <label for="editor-temple-name" class="block font-semibold text-zinc-300 mb-1">寺廟名稱 <span class="text-red-400">*</span></label>
+          <input type="text" id="editor-temple-name" required autofocus placeholder="例如：臺南北極殿" class="w-full p-2.5 rounded-xl border border-zinc-700 bg-zinc-950 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-red-500" />
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label for="editor-temple-county" class="block font-semibold text-zinc-300 mb-1">縣市 <span class="text-red-400">*</span></label>
+            <input type="text" id="editor-temple-county" list="editor-county-list" required placeholder="例如：臺南市" class="w-full p-2.5 rounded-xl border border-zinc-700 bg-zinc-950 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-red-500" />
+            <datalist id="editor-county-list">
+              <option value="臺南市"></option><option value="高雄市"></option><option value="雲林縣"></option>
+              <option value="嘉義縣"></option><option value="彰化縣"></option><option value="屏東縣"></option>
+              <option value="南投縣"></option><option value="新北市"></option><option value="臺中市"></option>
+              <option value="苗栗縣"></option><option value="澎湖縣"></option><option value="金門縣"></option>
+              <option value="嘉義市"></option><option value="宜蘭縣"></option><option value="臺東縣"></option>
+              <option value="花蓮縣"></option><option value="桃園市"></option><option value="臺北市"></option>
+              <option value="連江縣"></option><option value="基隆市"></option><option value="新竹市"></option>
+              <option value="新竹縣"></option>
+            </datalist>
+          </div>
+          <div>
+            <label for="editor-temple-district" class="block font-semibold text-zinc-300 mb-1">鄉鎮市區 <span class="text-red-400">*</span></label>
+            <input type="text" id="editor-temple-district" required placeholder="例如：中西區" class="w-full p-2.5 rounded-xl border border-zinc-700 bg-zinc-950 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-red-500" />
+          </div>
+        </div>
+
+        <div>
+          <label for="editor-temple-address" class="block font-semibold text-zinc-300 mb-1">詳細地址</label>
+          <input type="text" id="editor-temple-address" placeholder="例如：臺南市中西區民權路二段89號" class="w-full p-2.5 rounded-xl border border-zinc-700 bg-zinc-950 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-red-500" />
+        </div>
+
+        <div class="bg-zinc-950/80 p-3.5 rounded-2xl border border-zinc-800 space-y-2.5">
+          <div class="flex items-center justify-between gap-2 flex-wrap">
+            <span class="font-bold text-zinc-200">地圖座標 (WGS84 經緯度)</span>
+            <div class="flex items-center gap-1.5">
+              <button type="button" id="btn-editor-geocode" class="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-red-300 rounded-lg font-bold transition flex items-center gap-1">
+                <i data-lucide="search" class="w-3 h-3"></i> 依地址定位
+              </button>
+              <button type="button" id="btn-editor-mapcenter" class="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 rounded-lg font-bold transition flex items-center gap-1">
+                <i data-lucide="crosshair" class="w-3 h-3"></i> 取地圖中心
+              </button>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label for="editor-temple-lat" class="block text-[11px] text-zinc-400 mb-1">緯度 (Lat，約 21~26)</label>
+              <input type="number" id="editor-temple-lat" step="any" min="-90" max="90" placeholder="22.9951" class="w-full p-2 rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-red-500" />
+            </div>
+            <div>
+              <label for="editor-temple-lon" class="block text-[11px] text-zinc-400 mb-1">經度 (Lon，約 118~122)</label>
+              <input type="number" id="editor-temple-lon" step="any" min="-180" max="180" placeholder="120.2072" class="w-full p-2 rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-red-500" />
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label for="editor-temple-deity" class="block font-semibold text-zinc-300 mb-1">主祀神尊稱</label>
+            <input type="text" id="editor-temple-deity" placeholder="玄天上帝" class="w-full p-2.5 rounded-xl border border-zinc-700 bg-zinc-950 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-red-500" />
+          </div>
+          <div>
+            <label for="editor-temple-year" class="block font-semibold text-zinc-300 mb-1">建立年份 (選填)</label>
+            <input type="text" id="editor-temple-year" placeholder="例如：1669 或 明鄭時期" class="w-full p-2.5 rounded-xl border border-zinc-700 bg-zinc-950 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-red-500" />
+          </div>
+        </div>
+
+        <div>
+          <label for="editor-temple-source" class="block font-semibold text-zinc-300 mb-1">資料來源網址 (選填)</label>
+          <input type="url" id="editor-temple-source" placeholder="https://..." class="w-full p-2.5 rounded-xl border border-zinc-700 bg-zinc-950 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-red-500" />
+        </div>
+      </div>
+
+      <div class="p-4 bg-zinc-950/90 border-t border-zinc-800 flex items-center justify-between gap-2 shrink-0">
+        <button type="button" id="btn-editor-delete" class="hidden px-3 py-2 bg-red-950/70 hover:bg-red-900 text-red-300 border border-red-800/70 font-bold rounded-xl text-xs transition flex items-center gap-1">
+          <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> 刪除此寺廟
+        </button>
+        <div class="flex items-center gap-2 ml-auto">
+          <button type="button" id="btn-cancel-temple-editor" class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 font-bold rounded-xl text-xs transition">
+            取消
+          </button>
+          <button type="submit" id="btn-save-temple-editor" class="px-5 py-2 bg-red-700 hover:bg-red-600 text-white font-bold rounded-xl text-xs shadow transition flex items-center gap-1">
+            <i data-lucide="save" class="w-3.5 h-3.5"></i> 儲存寺廟資料
+          </button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="temples_data.js?v=20261116_1625"></script>
+  <script src="firebase-config.js?v=20261116_1625"></script>
+  <script src="app.js?v=20261116_1625"></script>
 </body>
 </html>

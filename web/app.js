@@ -14,8 +14,16 @@ db.version(2).stores({
   photos: "++id, templeId, createdAt",
   itineraries: "id, createdAt, name, status"
 });
+db.version(3).stores({
+  records: "templeId, status, visitDate, updatedAt",
+  photos: "++id, templeId, createdAt",
+  itineraries: "id, createdAt, name, status",
+  templeOverrides: "id, updatedAt"
+});
 
 // === 2. 全域狀態 ===
+const BASE_TEMPLES_DATA = Array.isArray(TEMPLES_DATA) ? TEMPLES_DATA.map(t => ({ ...t })) : [];
+let templeOverridesMap = {};  // templeId -> override record or { id, _deleted: true, updatedAt }
 let userRecordsMap = {};      // templeId -> record
 let templePhotosMap = {};     // templeId -> array of { id, dataUrl }
 let currentActiveTemple = null;
@@ -43,6 +51,8 @@ let fbAuth = null;
 let currentUser = null;
 let itinerariesUnsubscribe = null;
 let userRecordsUnsubscribe = null;
+let templeOverridesUnsubscribe = null;
+let publicTempleOverridesUnsubscribe = null;
 
 // 讀取外部設定檔 (firebase-config.js) 注入之管理員白名單，避免將 Email 硬編碼於程式中
 function getAllowedAdminEmails() {
@@ -128,6 +138,55 @@ function sanitizeImageUrl(url) {
     return encodeURI(s);
   }
   return "";
+}
+
+function sanitizeExternalUrl(url) {
+  if (!url) return "";
+  const s = String(url).trim();
+  if (s.startsWith("https://") || s.startsWith("http://")) {
+    return encodeURI(s);
+  }
+  return "";
+}
+
+/**
+ * 合併基礎靜態字典 (BASE_TEMPLES_DATA) 與增刪改覆寫表 (templeOverridesMap)，
+ * 即時更新全域 TEMPLES_DATA 及相關下拉選單與統計。
+ */
+function rebuildTemplesData() {
+  const merged = [];
+  const baseIds = new Set();
+
+  BASE_TEMPLES_DATA.forEach(base => {
+    baseIds.add(base.id);
+    const ov = templeOverridesMap[base.id];
+    if (ov && ov._deleted) return;
+    merged.push(ov ? { ...base, ...ov, id: base.id } : { ...base });
+  });
+
+  // 附加使用者新增的非基礎字典寺廟 (依更新時間或建立序排在最前以利查找，或附在末尾)
+  Object.values(templeOverridesMap).forEach(ov => {
+    if (!ov || !ov.id || baseIds.has(ov.id) || ov._deleted) return;
+    merged.unshift({ ...ov });
+  });
+
+  TEMPLES_DATA.length = 0;
+  TEMPLES_DATA.push(...merged);
+
+  populateCountySelect();
+  const listCounty = document.getElementById("list-filter-county");
+  if (listCounty && listCounty.value) {
+    updateListDistrictSelect(listCounty.value, true);
+  }
+  if (typeof populateStartTempleDropdowns === "function") {
+    populateStartTempleDropdowns(true);
+  }
+  if (typeof refreshDashboardCountyOptions === "function") {
+    refreshDashboardCountyOptions();
+  }
+  if (typeof initPlannerRegionUI === "function" && document.getElementById("planner-county-chips")?.children.length > 0) {
+    initPlannerRegionUI(true);
+  }
 }
 
 /**
@@ -352,6 +411,15 @@ function initPhotoLightbox() {
 // === 4. 本地資料庫載入 (Local-First) ===
 async function loadUserDataFromLocal() {
   try {
+    if (db.templeOverrides) {
+      const allOverrides = await db.templeOverrides.toArray();
+      templeOverridesMap = {};
+      allOverrides.forEach(ov => {
+        if (ov && ov.id) templeOverridesMap[ov.id] = ov;
+      });
+      rebuildTemplesData();
+    }
+
     const allRecords = await db.records.toArray();
     userRecordsMap = {};
     allRecords.forEach(r => {
@@ -545,6 +613,16 @@ function initFirebaseEngine() {
       setCloudStatus("offline", "離線快取中");
     });
 
+    // 公開寺廟基本資料覆寫監聽 (若後台尚未開啟公開讀取規則，靜默略過不影響登入同步)
+    try {
+      if (publicTempleOverridesUnsubscribe) publicTempleOverridesUnsubscribe();
+      publicTempleOverridesUnsubscribe = fbDb.collection("temple_overrides").onSnapshot(async (snapshot) => {
+        await applyTempleOverridesSnapshot(snapshot);
+      }, (err) => {
+        console.debug("公開 temple_overrides 監聽略過:", err?.code || err?.message);
+      });
+    } catch (_) {}
+
     if (settingsBadge) {
       settingsBadge.className = "text-xs px-2.5 py-1 rounded-full font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-800/70";
       settingsBadge.textContent = "已連線 (雲端同步中)";
@@ -594,6 +672,35 @@ function setCloudStatus(state, text) {
   }
 }
 
+async function applyTempleOverridesSnapshot(snapshot) {
+  if (!snapshot) return;
+  let changed = false;
+  for (const change of snapshot.docChanges()) {
+    const data = change.doc.data();
+    const tid = change.doc.id;
+    if (change.type === "added" || change.type === "modified") {
+      const incomingTime = data.updatedAt || "";
+      const existingTime = templeOverridesMap[tid]?.updatedAt || "";
+      if (!templeOverridesMap[tid] || incomingTime >= existingTime) {
+        const record = { ...data, id: tid };
+        templeOverridesMap[tid] = record;
+        if (db.templeOverrides) await db.templeOverrides.put(record);
+        changed = true;
+      }
+    } else if (change.type === "removed") {
+      if (templeOverridesMap[tid]) {
+        delete templeOverridesMap[tid];
+        if (db.templeOverrides) await db.templeOverrides.delete(tid);
+        changed = true;
+      }
+    }
+  }
+  if (changed) {
+    rebuildTemplesData();
+    renderAllViews();
+  }
+}
+
 // 使用者個人資料與規劃路線之雲端雙向即時同步
 function setupUserDataSync(user) {
   if (itinerariesUnsubscribe) {
@@ -603,6 +710,10 @@ function setupUserDataSync(user) {
   if (userRecordsUnsubscribe) {
     try { userRecordsUnsubscribe(); } catch (_) {}
     userRecordsUnsubscribe = null;
+  }
+  if (templeOverridesUnsubscribe) {
+    try { templeOverridesUnsubscribe(); } catch (_) {}
+    templeOverridesUnsubscribe = null;
   }
 
   if (!user || !fbDb) return;
@@ -663,7 +774,19 @@ function setupUserDataSync(user) {
     console.warn("初始化紀錄監聽失敗:", err);
   }
 
-  // 3. 自動執行本地快取與雲端庫雙向補足對齊 (防止跨裝置登入時資料脫節)
+  // 3. 雙向同步使用者自訂或修改之寺廟基本資料 (Temple Overrides)
+  try {
+    templeOverridesUnsubscribe = fbDb.collection("users").doc(user.uid).collection("temple_overrides")
+      .onSnapshot(async (snapshot) => {
+        await applyTempleOverridesSnapshot(snapshot);
+      }, (err) => {
+        console.warn("寺廟基本資料同步監聽提醒:", err);
+      });
+  } catch (err) {
+    console.warn("初始化寺廟基本資料監聽失敗:", err);
+  }
+
+  // 4. 自動執行本地快取與雲端庫雙向補足對齊 (防止跨裝置登入時資料脫節)
   reconcileLocalDataToCloud(user, false);
 }
 
@@ -680,6 +803,7 @@ async function reconcileLocalDataToCloud(user, isManual = false) {
   try {
     const localRecords = await db.records.toArray();
     const localItineraries = await db.itineraries.toArray();
+    const localOverrides = db.templeOverrides ? await db.templeOverrides.toArray() : [];
 
     // 1. 同步本機已參拜紀錄與相片至雲端
     if (localRecords.length > 0) {
@@ -771,6 +895,18 @@ async function reconcileLocalDataToCloud(user, isManual = false) {
       }
     }
 
+    // 3. 同步本機寺廟基本資料覆寫至雲端
+    if (localOverrides.length > 0) {
+      for (const ov of localOverrides) {
+        await withTimeout(
+          fbDb.collection("users").doc(user.uid).collection("temple_overrides").doc(ov.id).set(ov, { merge: true }),
+          5000,
+          "同步寺廟基本資料逾時"
+        );
+        fbDb.collection("temple_overrides").doc(ov.id).set(ov, { merge: true }).catch(() => {});
+      }
+    }
+
     setCloudStatus("online", `雲端已連線 (${localRecords.length} 筆同步)`);
     if (syncBtn) {
       syncBtn.disabled = false;
@@ -778,7 +914,7 @@ async function reconcileLocalDataToCloud(user, isManual = false) {
       if (window.lucide) lucide.createIcons();
     }
     if (isManual) {
-      alert(`✅ 雲端雙向同步成功！已將本機 ${localRecords.length} 筆打卡紀錄與 ${localItineraries.length} 條自訂行程完整推播至雲端庫。`);
+      alert(`✅ 雲端雙向同步成功！已將本機 ${localRecords.length} 筆打卡紀錄、${localItineraries.length} 條自訂行程與 ${localOverrides.length} 筆寺廟資料變更推播至雲端庫。`);
     }
   } catch (err) {
     console.warn("自動對齊雲端紀錄提醒:", err);
@@ -836,6 +972,11 @@ function updateAuthUI(user) {
     if (settingsLockedBox) settingsLockedBox.classList.add("hidden");
     if (settingsContentBox) settingsContentBox.classList.remove("hidden");
     if (settingsUserEmail) settingsUserEmail.textContent = user.email || user.displayName || "管理員已連線";
+
+    // 解鎖寺廟資料新增與編輯按鈕
+    document.getElementById("btn-add-temple-map")?.classList.remove("hidden");
+    document.getElementById("btn-add-temple-list")?.classList.remove("hidden");
+    document.getElementById("btn-edit-temple-info")?.classList.remove("hidden");
   } else {
     if (btnLogin) btnLogin.classList.remove("hidden");
     if (userProfile) {
@@ -851,6 +992,11 @@ function updateAuthUI(user) {
     if (settingsLockedBox) settingsLockedBox.classList.remove("hidden");
     if (settingsContentBox) settingsContentBox.classList.add("hidden");
 
+    // 隱藏寺廟資料新增與編輯按鈕
+    document.getElementById("btn-add-temple-map")?.classList.add("hidden");
+    document.getElementById("btn-add-temple-list")?.classList.add("hidden");
+    document.getElementById("btn-edit-temple-info")?.classList.add("hidden");
+
     // 若有活動中導航抽屜，登出時關閉並清理地圖路線折線
     if (activeNavItinerary) {
       closeRouteNavDrawer();
@@ -862,6 +1008,10 @@ function updateAuthUI(user) {
   const modal = document.getElementById("temple-modal");
   if (currentActiveTemple && modal && !modal.classList.contains("hidden")) {
     openTempleModal(currentActiveTemple.id);
+  }
+
+  if (typeof renderListView === "function") {
+    renderListView();
   }
 
   if (window.lucide) lucide.createIcons();
@@ -913,6 +1063,10 @@ async function logoutGoogle() {
     if (userRecordsUnsubscribe) {
       try { userRecordsUnsubscribe(); } catch (_) {}
       userRecordsUnsubscribe = null;
+    }
+    if (templeOverridesUnsubscribe) {
+      try { templeOverridesUnsubscribe(); } catch (_) {}
+      templeOverridesUnsubscribe = null;
     }
     await fbAuth.signOut();
     currentUser = null;
@@ -1056,9 +1210,9 @@ function renderMapMarkers() {
     if (countyFilter && t.county !== countyFilter) return;
     if (statusFilter !== "all" && status !== statusFilter) return;
     if (searchKey) {
-      const match = t.name.toLowerCase().includes(searchKey) ||
-                    t.district.toLowerCase().includes(searchKey) ||
-                    t.address.toLowerCase().includes(searchKey);
+      const match = (t.name || "").toLowerCase().includes(searchKey) ||
+                    (t.district || "").toLowerCase().includes(searchKey) ||
+                    (t.address || "").toLowerCase().includes(searchKey);
       if (!match) return;
     }
 
@@ -1129,24 +1283,26 @@ function populateCountySelect() {
   });
 
   const sorted = Object.entries(countyCounts).sort((a, b) => b[1] - a[1]);
-  const optionsHtml = '<option value="">全部縣市 (732)</option>' +
-    sorted.map(([c, cnt]) => `<option value="${c}">${c} (${cnt})</option>`).join("");
+  const optionsHtml = `<option value="">全部縣市 (${TEMPLES_DATA.length})</option>` +
+    sorted.map(([c, cnt]) => `<option value="${escapeHtml(c)}">${escapeHtml(c)} (${cnt})</option>`).join("");
 
   if (mapSelect) {
     const cur = mapSelect.value;
     mapSelect.innerHTML = optionsHtml;
-    if (cur) mapSelect.value = cur;
+    if (cur && countyCounts[cur]) mapSelect.value = cur;
   }
   if (listSelect) {
     const cur = listSelect.value;
     listSelect.innerHTML = optionsHtml;
-    if (cur) listSelect.value = cur;
+    if (cur && countyCounts[cur]) listSelect.value = cur;
   }
 }
 
-function updateListDistrictSelect(selectedCounty) {
+function updateListDistrictSelect(selectedCounty, preserveSelection = false) {
   const districtSelect = document.getElementById("list-filter-district");
   if (!districtSelect) return;
+
+  const prevVal = preserveSelection ? districtSelect.value : "";
 
   if (!selectedCounty) {
     districtSelect.innerHTML = '<option value="">請先選擇縣市</option>';
@@ -1166,9 +1322,9 @@ function updateListDistrictSelect(selectedCounty) {
 
   const sorted = Object.entries(districtCounts).sort((a, b) => b[1] - a[1]);
   districtSelect.innerHTML = `<option value="">全部鄉鎮市區 (${totalInCounty})</option>` +
-    sorted.map(([d, cnt]) => `<option value="${d}">${d} (${cnt})</option>`).join("");
+    sorted.map(([d, cnt]) => `<option value="${escapeHtml(d)}">${escapeHtml(d)} (${cnt})</option>`).join("");
   districtSelect.disabled = false;
-  districtSelect.value = "";
+  districtSelect.value = (preserveSelection && prevVal && districtCounts[prevVal]) ? prevVal : "";
 }
 
 window.quickFilterList = function(countyName) {
@@ -1265,7 +1421,13 @@ window.openTempleModal = async function(templeId) {
   document.getElementById("modal-address").textContent = t.address || "無詳細地址";
   document.getElementById("meta-main-deity").textContent = t.mainDeity || "玄天上帝";
   document.getElementById("meta-year").textContent = t.year ? `${t.year} 年` : "未詳載";
-  document.getElementById("meta-source").href = t.sourceUrl || "#";
+  const safeSourceUrl = sanitizeExternalUrl(t.sourceUrl);
+  const metaSourceEl = document.getElementById("meta-source");
+  if (metaSourceEl) {
+    metaSourceEl.href = safeSourceUrl || "#";
+    metaSourceEl.classList.toggle("opacity-50", !safeSourceUrl);
+    metaSourceEl.classList.toggle("pointer-events-none", !safeSourceUrl);
+  }
 
   const navBtn = document.getElementById("btn-navigate");
   if (t.lat && t.lon) {
@@ -1281,6 +1443,7 @@ window.openTempleModal = async function(templeId) {
   // 權限控管：判斷是否具備管理員編輯權限
   const actionBar = document.getElementById("modal-action-bar");
   const toggleBtn = document.getElementById("btn-toggle-status");
+  const editTempleBtn = document.getElementById("btn-edit-temple-info");
   const visitorBanner = document.getElementById("modal-visitor-banner");
   const readonlyRecord = document.getElementById("modal-readonly-record");
   const editBox = document.getElementById("modal-edit-box");
@@ -1291,6 +1454,7 @@ window.openTempleModal = async function(templeId) {
     // === 管理者模式：解鎖編輯、上傳與刪除權限 ===
     if (actionBar) actionBar.className = "grid grid-cols-2 gap-3";
     if (toggleBtn) toggleBtn.classList.remove("hidden");
+    if (editTempleBtn) editTempleBtn.classList.remove("hidden");
     if (visitorBanner) visitorBanner.classList.add("hidden");
     if (readonlyRecord) readonlyRecord.classList.add("hidden");
     if (editBox) editBox.classList.remove("hidden");
@@ -1305,6 +1469,7 @@ window.openTempleModal = async function(templeId) {
     // === 訪客模式：唯讀展示，隱藏所有編輯與儲存元件 ===
     if (actionBar) actionBar.className = "grid grid-cols-1 gap-3";
     if (toggleBtn) toggleBtn.classList.add("hidden");
+    if (editTempleBtn) editTempleBtn.classList.add("hidden");
     if (visitorBanner) visitorBanner.classList.remove("hidden");
     if (editBox) editBox.classList.add("hidden");
     if (footerEdit) footerEdit.classList.add("hidden");
@@ -1734,7 +1899,7 @@ function renderListView() {
   });
 
   const badge = document.getElementById("list-total-badge");
-  if (badge) badge.textContent = `顯示 ${list.length} / 732 間`;
+  if (badge) badge.textContent = `顯示 ${list.length} / ${TEMPLES_DATA.length} 間`;
 
   if (list.length === 0) {
     container.innerHTML = `
@@ -1757,6 +1922,7 @@ function renderListView() {
 
     const photoCount = templePhotosMap[t.id]?.length || 0;
     const photoBadge = photoCount > 0 ? `<span class="text-[11px] text-red-300 bg-red-950/70 border border-red-900/60 px-1.5 py-0.5 rounded flex items-center gap-1"><i data-lucide="image" class="w-3 h-3"></i> ${photoCount} 張</span>` : '';
+    const safeIdAttr = escapeHtml(String(t.id || ''));
 
     return `
       <div class="bg-zinc-900 rounded-2xl p-4 border border-zinc-800 hover:border-zinc-700 shadow-sm hover:shadow-md transition flex flex-col justify-between">
@@ -1777,7 +1943,8 @@ function renderListView() {
           </div>
           <div class="flex gap-2">
             ${t.lat && t.lon ? `<a href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(t.lat)},${encodeURIComponent(t.lon)}" target="_blank" class="px-2.5 py-1 bg-zinc-800 text-zinc-200 hover:bg-zinc-700 border border-zinc-700 text-xs font-bold rounded-lg transition">導航</a>` : ''}
-            <button onclick="openTempleModal('${escapeHtml(String(t.id || ''))}')" class="px-3 py-1 bg-red-700 text-white hover:bg-red-600 text-xs font-bold rounded-lg transition">${currentUser ? '打卡/編輯' : '詳情'}</button>
+            ${currentUser ? `<button onclick="openTempleEditorModal('${safeIdAttr}')" class="px-2.5 py-1 bg-zinc-800 text-red-400 hover:bg-zinc-700 border border-red-900/60 text-xs font-bold rounded-lg transition">編輯</button>` : ''}
+            <button onclick="openTempleModal('${safeIdAttr}')" class="px-3 py-1 bg-red-700 text-white hover:bg-red-600 text-xs font-bold rounded-lg transition">${currentUser ? '打卡/編輯' : '詳情'}</button>
           </div>
         </div>
       </div>
@@ -1801,26 +1968,34 @@ window.setDashboardScope = function(scope) {
   renderDashboardView();
 };
 
+// 動態更新儀表板縣市範圍下拉選單
+function refreshDashboardCountyOptions() {
+  const scopeSelect = document.getElementById("dash-scope-select");
+  if (!scopeSelect) return;
+
+  const countyCounts = {};
+  TEMPLES_DATA.forEach(t => {
+    if (t.county) countyCounts[t.county] = (countyCounts[t.county] || 0) + 1;
+  });
+  const sorted = Object.entries(countyCounts).sort((a, b) => b[1] - a[1]);
+
+  if (currentDashboardScope !== "all" && !countyCounts[currentDashboardScope]) {
+    currentDashboardScope = "all";
+  }
+
+  scopeSelect.innerHTML = `<option value="all">全台玄帝古廟 (${TEMPLES_DATA.length} 間)</option>` +
+    sorted.map(([cName, count]) => `<option value="${escapeHtml(cName)}">${escapeHtml(cName)} (${count} 間)</option>`).join("");
+  scopeSelect.value = currentDashboardScope;
+}
+
 // 儀表板控制元件初始化
 function initDashboardControls() {
   const scopeSelect = document.getElementById("dash-scope-select");
-  if (scopeSelect && scopeSelect.options.length <= 1) {
-    const countyCounts = {};
-    TEMPLES_DATA.forEach(t => {
-      countyCounts[t.county] = (countyCounts[t.county] || 0) + 1;
-    });
-    const sorted = Object.entries(countyCounts).sort((a, b) => b[1] - a[1]);
-
-    sorted.forEach(([cName, count]) => {
-      const opt = document.createElement("option");
-      opt.value = cName;
-      opt.textContent = `${cName} (${count} 間)`;
-      scopeSelect.appendChild(opt);
-    });
-
-    scopeSelect.addEventListener("change", (e) => {
+  if (scopeSelect) {
+    refreshDashboardCountyOptions();
+    scopeSelect.onchange = (e) => {
       window.setDashboardScope(e.target.value);
-    });
+    };
   }
 
   const sortSelect = document.getElementById("dash-sort-select");
@@ -1929,8 +2104,9 @@ function renderDashboardSpotlight() {
   const totalEl = document.getElementById("dash-spotlight-total");
   const percentEl = document.getElementById("dash-spotlight-percent");
 
+  const activeCountyCount = new Set(TEMPLES_DATA.map(t => t.county).filter(Boolean)).size;
   if (tagEl) tagEl.textContent = isAll ? "全台總體進度" : `${currentDashboardScope} 轄區進度`;
-  if (subtagEl) subtagEl.textContent = isAll ? `全台 22 縣市・共 ${total} 間` : `轄內宮廟 ${total} 間`;
+  if (subtagEl) subtagEl.textContent = isAll ? `全台 ${activeCountyCount} 縣市・共 ${total} 間` : `轄內宮廟 ${total} 間`;
   if (scopeNameEl) scopeNameEl.textContent = scopeName;
   if (visitedEl) visitedEl.textContent = visited;
   if (totalEl) totalEl.textContent = `/ ${total} 間`;
@@ -1973,8 +2149,9 @@ function renderDashboardSpotlight() {
   if (oldTainanRatio) {
     const tainanTemples = TEMPLES_DATA.filter(t => t.county === "臺南市");
     const tVisited = tainanTemples.filter(t => userRecordsMap[t.id]?.status === "visited").length;
-    oldTainanRatio.textContent = `${tVisited} / 96`;
-    if (oldTainanBar) oldTainanBar.style.width = `${Math.round((tVisited / 96) * 100)}%`;
+    const tTotal = tainanTemples.length;
+    oldTainanRatio.textContent = `${tVisited} / ${tTotal}`;
+    if (oldTainanBar) oldTainanBar.style.width = `${tTotal > 0 ? Math.round((tVisited / tTotal) * 100) : 0}%`;
   }
 }
 
@@ -2192,11 +2369,16 @@ function renderTimelineView() {
 }
 
 function renderAllViews() {
-  const visitedCount = Object.values(userRecordsMap).filter(r => r.status === "visited").length;
-  const percent = ((visitedCount / TEMPLES_DATA.length) * 100).toFixed(1);
+  const totalCount = TEMPLES_DATA.length;
+  const visitedCount = TEMPLES_DATA.filter(t => userRecordsMap[t.id]?.status === "visited").length;
+  const percent = totalCount > 0 ? ((visitedCount / totalCount) * 100).toFixed(1) : "0.0";
 
+  const headerTotalBadge = document.getElementById("header-total-temples");
+  const headerTotalCount = document.getElementById("header-total-count");
   const headerVisited = document.getElementById("header-visited-count");
   const headerPercent = document.getElementById("header-percent");
+  if (headerTotalBadge) headerTotalBadge.textContent = totalCount;
+  if (headerTotalCount) headerTotalCount.textContent = totalCount;
   if (headerVisited) headerVisited.textContent = visitedCount;
   if (headerPercent) headerPercent.textContent = `${percent}%`;
 
@@ -2209,6 +2391,7 @@ function renderAllViews() {
 // === 10. 事件監聽綁定 ===
 function bindEvents() {
   initPhotoLightbox();
+  initTempleEditor();
 
   document.getElementById("filter-county")?.addEventListener("change", () => {
     renderMapMarkers();
@@ -2340,12 +2523,14 @@ function bindEvents() {
     const allRecords = await db.records.toArray();
     const allPhotos = await db.photos.toArray();
     const allItineraries = await db.itineraries.toArray();
+    const allOverrides = db.templeOverrides ? await db.templeOverrides.toArray() : [];
     const backupData = {
-      version: "2.1",
+      version: "2.2",
       exportDate: new Date().toISOString(),
       records: allRecords,
       photos: allPhotos,
-      itineraries: allItineraries
+      itineraries: allItineraries,
+      templeOverrides: allOverrides
     };
 
     const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: "application/json" });
@@ -2373,13 +2558,19 @@ function bindEvents() {
         if (!backup.records) throw new Error("備份檔案格式不正確");
 
         const itinCount = backup.itineraries?.length || 0;
-        if (confirm(`確認匯入備份？包含 ${backup.records.length} 筆參拜紀錄、${backup.photos?.length || 0} 張相片與 ${itinCount} 條自訂行程。`)) {
+        const ovCount = backup.templeOverrides?.length || 0;
+        if (confirm(`確認匯入備份？包含 ${backup.records.length} 筆參拜紀錄、${backup.photos?.length || 0} 張相片、${itinCount} 條自訂行程與 ${ovCount} 筆廟宇資料異動。`)) {
           await db.records.clear();
           await db.photos.clear();
           await db.itineraries.clear();
+          if (db.templeOverrides) await db.templeOverrides.clear();
+          templeOverridesMap = {};
           if (backup.records.length) await db.records.bulkAdd(backup.records);
           if (backup.photos?.length) await db.photos.bulkAdd(backup.photos);
           if (backup.itineraries?.length) await db.itineraries.bulkAdd(backup.itineraries);
+          if (db.templeOverrides && backup.templeOverrides?.length) {
+            await db.templeOverrides.bulkPut(backup.templeOverrides);
+          }
           updateSavedItinerariesCount();
           await loadUserDataFromLocal();
           renderAllViews();
@@ -2398,12 +2589,15 @@ function bindEvents() {
       alert("權限不足：請先使用 Google 帳號登入後才能重設本機紀錄！");
       return;
     }
-    if (confirm("⚠️ 警告：這將會清除您在本機所有的暫存參拜打卡紀錄、相片與自訂行程，確認清除？")) {
+    if (confirm("⚠️ 警告：這將會清除您在本機所有的暫存參拜打卡紀錄、相片、自訂行程與廟宇資料異動，確認清除？")) {
       await db.records.clear();
       await db.photos.clear();
       await db.itineraries.clear();
+      if (db.templeOverrides) await db.templeOverrides.clear();
       userRecordsMap = {};
       templePhotosMap = {};
+      templeOverridesMap = {};
+      rebuildTemplesData();
       updateSavedItinerariesCount();
       renderAllViews();
       alert("已重設本機紀錄");
@@ -2542,9 +2736,12 @@ window.requestCurrentLocation = function() {
 };
 
 // 填入指定廟宇作為起點的下拉選單
-function populateStartTempleDropdowns() {
+function populateStartTempleDropdowns(forceRefresh = false) {
   const countySelect = document.getElementById("start-temple-county");
-  if (!countySelect || countySelect.options.length > 1) return;
+  if (!countySelect || (!forceRefresh && countySelect.options.length > 1)) return;
+
+  const prevCounty = countySelect.value;
+  countySelect.innerHTML = '<option value="">請先選擇縣市</option>';
 
   const counties = [...new Set(TEMPLES_DATA.map(t => t.county))].filter(Boolean);
   counties.forEach(c => {
@@ -2553,6 +2750,18 @@ function populateStartTempleDropdowns() {
     opt.textContent = c;
     countySelect.appendChild(opt);
   });
+
+  if (prevCounty && counties.includes(prevCounty)) {
+    countySelect.value = prevCounty;
+    if (forceRefresh) {
+      const templeSelect = document.getElementById("start-temple-select");
+      const prevTemple = templeSelect?.value || "";
+      window.onStartTempleCountyChange(prevCounty);
+      if (templeSelect && prevTemple && TEMPLES_DATA.some(t => t.id === prevTemple)) {
+        templeSelect.value = prevTemple;
+      }
+    }
+  }
 }
 
 window.onStartTempleCountyChange = function(county) {
@@ -2566,7 +2775,7 @@ window.onStartTempleCountyChange = function(county) {
 
   const filtered = TEMPLES_DATA.filter(t => t.county === county && t.lat && t.lon);
   templeSelect.innerHTML = '<option value="">請選擇廟宇作為起點</option>' +
-    filtered.map(t => `<option value="${t.id}">${escapeHtml(t.name)} (${escapeHtml(t.district)})</option>`).join("");
+    filtered.map(t => `<option value="${escapeHtml(String(t.id))}">${escapeHtml(t.name)} (${escapeHtml(t.district)})</option>`).join("");
   templeSelect.disabled = false;
 };
 
@@ -2583,6 +2792,60 @@ window.setPresetStart = function(name, lat, lon) {
   updatePlannerStartStatusUI();
 };
 
+// 共用地理編碼查詢工具 (Photon -> Nominatim 備援)
+async function geocodeAddressCoords(query) {
+  const q = (query || "").trim();
+  if (!q) return null;
+
+  // 1. Photon (OpenStreetMap 台灣地理編碼引擎)
+  try {
+    const ctrl = new AbortController();
+    const timeoutId = setTimeout(() => ctrl.abort(), 6000);
+    const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=1`, {
+      signal: ctrl.signal
+    });
+    clearTimeout(timeoutId);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.features && data.features.length > 0) {
+        const coords = data.features[0].geometry.coordinates; // [lon, lat]
+        const lon = parseFloat(coords[0]);
+        const lat = parseFloat(coords[1]);
+        if (Number.isFinite(lat) && Number.isFinite(lon)) {
+          return {
+            lat,
+            lon,
+            name: data.features[0].properties?.name || q,
+            source: "photon"
+          };
+        }
+      }
+    }
+  } catch (_) {}
+
+  // 2. 次選：OpenStreetMap Nominatim 引擎
+  try {
+    const ctrl = new AbortController();
+    const timeoutId = setTimeout(() => ctrl.abort(), 6000);
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`, {
+      signal: ctrl.signal
+    });
+    clearTimeout(timeoutId);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.length > 0) {
+        const lat = parseFloat(data[0].lat);
+        const lon = parseFloat(data[0].lon);
+        if (Number.isFinite(lat) && Number.isFinite(lon)) {
+          return { lat, lon, name: q, source: "nominatim" };
+        }
+      }
+    }
+  } catch (_) {}
+
+  return null;
+}
+
 window.geocodeCustomAddress = async function() {
   const input = document.getElementById("start-custom-address");
   const query = input?.value.trim();
@@ -2591,21 +2854,23 @@ window.geocodeCustomAddress = async function() {
     return;
   }
 
-  // 1. 優先本地比對全台 740 間玄天上帝廟資料庫 (0 毫秒極速且精準)
+  // 1. 優先本地比對玄天上帝廟資料庫 (0 毫秒極速且精準)
   const qLower = query.toLowerCase();
-  const localMatch = TEMPLES_DATA.find(t => 
-    t.name.toLowerCase() === qLower || 
-    t.name.toLowerCase().includes(qLower) ||
-    (t.address && t.address.toLowerCase().includes(qLower))
+  const localMatch = TEMPLES_DATA.find(t =>
+    t.lat && t.lon && (
+      t.name.toLowerCase() === qLower ||
+      t.name.toLowerCase().includes(qLower) ||
+      (t.address && t.address.toLowerCase().includes(qLower))
+    )
   );
 
   // 若完全相符或關鍵字明確，直接採用本地資料庫座標
   if (localMatch && (localMatch.name.toLowerCase() === qLower || qLower.length >= 3)) {
-    plannerStartPoint = { 
-      type: 'custom', 
-      name: `${localMatch.name} (${localMatch.county}${localMatch.district})`, 
-      lat: localMatch.lat, 
-      lon: localMatch.lon 
+    plannerStartPoint = {
+      type: 'custom',
+      name: `${localMatch.name} (${localMatch.county}${localMatch.district})`,
+      lat: localMatch.lat,
+      lon: localMatch.lon
     };
     updatePlannerStartStatusUI();
     alert(`已成功定位起點（宮廟資料庫）：「${localMatch.name}」(${localMatch.county}${localMatch.district})`);
@@ -2620,63 +2885,21 @@ window.geocodeCustomAddress = async function() {
   }
 
   try {
-    let found = false;
+    const geo = await geocodeAddressCoords(query);
+    if (geo) {
+      plannerStartPoint = { type: 'custom', name: geo.name, lat: geo.lat, lon: geo.lon };
+      updatePlannerStartStatusUI();
+      alert(`已成功定位起點：「${geo.name}」`);
+      return;
+    }
 
-    // 2. 呼叫支援全網 CORS 的 Photon (OpenStreetMap 台灣地理編碼引擎)
-    try {
-      const ctrl = new AbortController();
-      const timeoutId = setTimeout(() => ctrl.abort(), 6000);
-      const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=1`, {
-        signal: ctrl.signal
-      });
-      clearTimeout(timeoutId);
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.features && data.features.length > 0) {
-          const coords = data.features[0].geometry.coordinates; // [lon, lat]
-          const lon = parseFloat(coords[0]);
-          const lat = parseFloat(coords[1]);
-          const placeName = data.features[0].properties.name || query;
-          plannerStartPoint = { type: 'custom', name: placeName, lat, lon };
-          updatePlannerStartStatusUI();
-          alert(`已成功定位起點：「${placeName}」`);
-          found = true;
-        }
-      }
-    } catch (_) {}
-
-    if (found) return;
-
-    // 3. 次選：備援呼叫 OpenStreetMap Nominatim 引擎
-    try {
-      const ctrl = new AbortController();
-      const timeoutId = setTimeout(() => ctrl.abort(), 6000);
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`, {
-        signal: ctrl.signal
-      });
-      clearTimeout(timeoutId);
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.length > 0) {
-          const lat = parseFloat(data[0].lat);
-          const lon = parseFloat(data[0].lon);
-          plannerStartPoint = { type: 'custom', name: query, lat, lon };
-          updatePlannerStartStatusUI();
-          alert(`已成功定位起點：「${query}」`);
-          found = true;
-        }
-      }
-    } catch (_) {}
-
-    if (found) return;
-
-    // 4. 若外部查詢無結果但本地有部分模糊相符，採用本地符合之宮廟
+    // 若外部查詢無結果但本地有部分模糊相符，採用本地符合之宮廟
     if (localMatch) {
-      plannerStartPoint = { 
-        type: 'custom', 
-        name: `${localMatch.name} (${localMatch.county}${localMatch.district})`, 
-        lat: localMatch.lat, 
-        lon: localMatch.lon 
+      plannerStartPoint = {
+        type: 'custom',
+        name: `${localMatch.name} (${localMatch.county}${localMatch.district})`,
+        lat: localMatch.lat,
+        lon: localMatch.lon
       };
       updatePlannerStartStatusUI();
       alert(`查無外部地圖精確坐標，已為您自動配對宮廟起點：「${localMatch.name}」(${localMatch.county}${localMatch.district})`);
@@ -2702,26 +2925,34 @@ function updatePlannerStartStatusUI() {
 }
 
 // 初始化區域選擇 UI (所有縣市 Chips)
-function initPlannerRegionUI() {
+function initPlannerRegionUI(forceRefresh = false) {
   const countyChipsContainer = document.getElementById("planner-county-chips");
-  if (!countyChipsContainer || countyChipsContainer.children.length > 0) return;
+  if (!countyChipsContainer || (!forceRefresh && countyChipsContainer.children.length > 0)) return;
 
-  const allCounties = [
+  const baseCounties = [
     "臺南市", "高雄市", "雲林縣", "嘉義縣", "彰化縣", "屏東縣", "南投縣", "新北市",
     "臺中市", "苗栗縣", "澎湖縣", "金門縣", "嘉義市", "宜蘭縣", "臺東縣", "花蓮縣",
     "桃園市", "臺北市", "連江縣", "基隆市", "新竹市", "新竹縣"
   ];
+  const allCounties = [...new Set([...baseCounties, ...TEMPLES_DATA.map(t => t.county).filter(Boolean)])];
 
-  countyChipsContainer.innerHTML = allCounties.map(c => `
-    <button type="button" onclick="switchPlannerCounty('${c}')" id="chip-county-${c}"
+  countyChipsContainer.innerHTML = allCounties.map(c => {
+    const safeC = escapeHtml(c);
+    return `
+    <button type="button" onclick="switchPlannerCounty('${safeC}')" id="chip-county-${safeC}"
       class="county-chip px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition ${c === plannerCurrentCounty ? 'bg-red-700 text-white border border-red-500/60 shadow-sm' : 'bg-zinc-800 text-zinc-300 border border-zinc-700 hover:bg-zinc-700'}">
-      ${c}
+      ${safeC}
     </button>
-  `).join("");
+  `;
+  }).join("");
 
-  switchPlannerCounty(plannerCurrentCounty);
-  if (plannerSelectedDistricts.size === 0) {
-    selectAllDistrictsInCurrentCounty();
+  if (forceRefresh) {
+    renderDistrictChipsForCounty(plannerCurrentCounty);
+  } else {
+    switchPlannerCounty(plannerCurrentCounty);
+    if (plannerSelectedDistricts.size === 0) {
+      selectAllDistrictsInCurrentCounty();
+    }
   }
 }
 
@@ -2752,10 +2983,12 @@ function renderDistrictChipsForCounty(county) {
   container.innerHTML = sortedDistricts.map(d => {
     const key = `${county}:${d}`;
     const isSelected = plannerSelectedDistricts.has(key);
+    const safeC = escapeHtml(county);
+    const safeD = escapeHtml(d);
     return `
-      <button type="button" onclick="toggleDistrictSelection('${county}', '${d}')" id="chip-dist-${county}-${d}"
+      <button type="button" onclick="toggleDistrictSelection('${safeC}', '${safeD}')" id="chip-dist-${safeC}-${safeD}"
         class="px-2.5 py-1 rounded-lg text-xs font-medium transition flex items-center gap-1 ${isSelected ? 'bg-red-700 text-white border border-red-500/60 shadow-sm font-bold' : 'bg-zinc-900 border border-zinc-700 text-zinc-300 hover:bg-zinc-800'}">
-        <span>${d}</span>
+        <span>${safeD}</span>
         <span class="text-[10px] opacity-80">(${distCounts[d]})</span>
       </button>
     `;
@@ -3540,7 +3773,7 @@ window.filterAddTempleList = function(keyword) {
         <strong class="text-zinc-100 font-bold">${escapeHtml(t.name)}</strong>
         <p class="text-[11px] text-zinc-400">${escapeHtml(t.county)} ${escapeHtml(t.district)}</p>
       </div>
-      <button onclick="addTempleToCalculatedRoute('${t.id}')" class="px-3 py-1 bg-red-700 hover:bg-red-600 text-white rounded-lg font-bold text-xs shadow-sm transition">
+      <button onclick="addTempleToCalculatedRoute('${escapeHtml(String(t.id || ''))}')" class="px-3 py-1 bg-red-700 hover:bg-red-600 text-white rounded-lg font-bold text-xs shadow-sm transition">
         ＋ 加入
       </button>
     </div>
@@ -3554,3 +3787,329 @@ window.addTempleToCalculatedRoute = function(templeId) {
   renderRouteStops();
   closeAddTempleToRouteModal();
 };
+
+// =========================================================================
+// === 14. 管理員寺廟基本資料增刪改引擎 (Temple Directory CRUD) ===
+// =========================================================================
+
+function closeTempleEditorDialog() {
+  const dialog = document.getElementById("temple-editor-dialog");
+  if (!dialog) return;
+  if (dialog.open && typeof dialog.close === "function") {
+    dialog.close();
+  } else {
+    dialog.removeAttribute("open");
+  }
+}
+
+async function syncTempleOverrideToCloud(id, record) {
+  if (!fbDb || !currentUser) return;
+  await fbDb.collection("users").doc(currentUser.uid).collection("temple_overrides").doc(id)
+    .set(record, { merge: true })
+    .catch(err => console.warn("同步寺廟資料異動至個人雲端提醒:", err));
+  fbDb.collection("temple_overrides").doc(id)
+    .set(record, { merge: true })
+    .catch(() => {});
+}
+
+function initTempleEditor() {
+  const dialog = document.getElementById("temple-editor-dialog");
+  const form = document.getElementById("temple-editor-form");
+  if (!dialog || !form || dialog.dataset.bound === "true") return;
+  dialog.dataset.bound = "true";
+
+  document.getElementById("btn-close-temple-editor")?.addEventListener("click", closeTempleEditorDialog);
+  document.getElementById("btn-cancel-temple-editor")?.addEventListener("click", closeTempleEditorDialog);
+  dialog.addEventListener("click", (e) => {
+    if (e.target === dialog) closeTempleEditorDialog();
+  });
+
+  // 依地址或宮廟名稱自動定位經緯度座標
+  const geocodeBtn = document.getElementById("btn-editor-geocode");
+  geocodeBtn?.addEventListener("click", async () => {
+    if (!currentUser) return;
+    const name = document.getElementById("editor-temple-name")?.value.trim() || "";
+    const county = document.getElementById("editor-temple-county")?.value.trim() || "";
+    const district = document.getElementById("editor-temple-district")?.value.trim() || "";
+    const address = document.getElementById("editor-temple-address")?.value.trim() || "";
+
+    const primaryQuery = address || `${county}${district}${name}`;
+    if (!primaryQuery) {
+      alert("請先填寫「詳細地址」或「寺廟名稱＋縣市鄉鎮市區」後再執行定位！");
+      return;
+    }
+
+    const origHtml = geocodeBtn.innerHTML;
+    geocodeBtn.disabled = true;
+    geocodeBtn.textContent = "定位中...";
+
+    try {
+      let geo = await geocodeAddressCoords(primaryQuery);
+      if (!geo && address && (county || district || name)) {
+        geo = await geocodeAddressCoords(`${county}${district}${name}`);
+      }
+      if (geo) {
+        const latInput = document.getElementById("editor-temple-lat");
+        const lonInput = document.getElementById("editor-temple-lon");
+        if (latInput) latInput.value = geo.lat.toFixed(6);
+        if (lonInput) lonInput.value = geo.lon.toFixed(6);
+      } else {
+        alert("查無此地址的精確座標，請嘗試補全縣市路名，或改用「取地圖中心」手動對位。");
+      }
+    } finally {
+      geocodeBtn.disabled = false;
+      geocodeBtn.innerHTML = origHtml;
+      if (window.lucide) lucide.createIcons();
+    }
+  });
+
+  // 取得目前主地圖中心點座標
+  document.getElementById("btn-editor-mapcenter")?.addEventListener("click", () => {
+    if (!currentUser) return;
+    if (typeof map !== "undefined" && map && typeof map.getCenter === "function") {
+      const center = map.getCenter();
+      const latInput = document.getElementById("editor-temple-lat");
+      const lonInput = document.getElementById("editor-temple-lon");
+      if (latInput) latInput.value = center.lat.toFixed(6);
+      if (lonInput) lonInput.value = center.lng.toFixed(6);
+    } else {
+      alert("地圖尚未載入完成，請先切換至「朝聖地圖」頁面或手動輸入經緯度。");
+    }
+  });
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    await saveTempleFromEditor();
+  });
+
+  document.getElementById("btn-editor-delete")?.addEventListener("click", async () => {
+    await deleteTempleFromEditor();
+  });
+}
+
+window.openTempleEditorModal = function(templeId = null) {
+  if (!currentUser) {
+    alert("權限不足：請先使用 Google 帳號登入後才能新增或編輯寺廟資料！");
+    return;
+  }
+
+  initTempleEditor();
+
+  const dialog = document.getElementById("temple-editor-dialog");
+  const form = document.getElementById("temple-editor-form");
+  const modeBadge = document.getElementById("temple-editor-mode-badge");
+  const titleEl = document.getElementById("temple-editor-title");
+  const deleteBtn = document.getElementById("btn-editor-delete");
+  if (!dialog || !form) return;
+
+  form.reset();
+
+  const setVal = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.value = val;
+  };
+
+  if (templeId) {
+    const t = TEMPLES_DATA.find(x => x.id === templeId);
+    if (!t) {
+      alert("找不到指定的寺廟資料，請重新整理後再試。");
+      return;
+    }
+
+    if (modeBadge) modeBadge.textContent = t.isCustom ? "編輯自訂廟宇" : "編輯寺廟資料";
+    if (titleEl) titleEl.textContent = "編輯寺廟基本資料";
+
+    setVal("editor-temple-id", t.id);
+    setVal("editor-temple-name", t.name || "");
+    setVal("editor-temple-county", t.county || "");
+    setVal("editor-temple-district", t.district || "");
+    setVal("editor-temple-address", t.address || "");
+    setVal("editor-temple-lat", (t.lat !== null && t.lat !== undefined && t.lat !== "") ? t.lat : "");
+    setVal("editor-temple-lon", (t.lon !== null && t.lon !== undefined && t.lon !== "") ? t.lon : "");
+    setVal("editor-temple-deity", t.mainDeity || "玄天上帝");
+    setVal("editor-temple-year", t.year || "");
+    setVal("editor-temple-source", t.sourceUrl || "");
+
+    if (deleteBtn) deleteBtn.classList.remove("hidden");
+  } else {
+    if (modeBadge) modeBadge.textContent = "新增宮廟紀錄";
+    if (titleEl) titleEl.textContent = "新增玄帝寺廟資料";
+
+    setVal("editor-temple-id", "");
+    setVal("editor-temple-deity", "玄天上帝");
+
+    if (deleteBtn) deleteBtn.classList.add("hidden");
+  }
+
+  if (window.lucide) lucide.createIcons();
+
+  if (typeof dialog.showModal === "function") {
+    if (!dialog.open) dialog.showModal();
+  } else {
+    dialog.setAttribute("open", "");
+  }
+};
+
+async function saveTempleFromEditor() {
+  if (!currentUser) {
+    alert("權限不足：請先使用 Google 帳號登入後才能儲存寺廟資料！");
+    return;
+  }
+
+  const getVal = (id) => document.getElementById(id)?.value.trim() || "";
+  const existingId = getVal("editor-temple-id");
+  const name = getVal("editor-temple-name");
+  const county = getVal("editor-temple-county");
+  const district = getVal("editor-temple-district");
+  const address = getVal("editor-temple-address");
+  const latStr = getVal("editor-temple-lat");
+  const lonStr = getVal("editor-temple-lon");
+  const mainDeity = getVal("editor-temple-deity") || "玄天上帝";
+  const year = getVal("editor-temple-year");
+  const rawSource = getVal("editor-temple-source");
+
+  if (!name || !county || !district) {
+    alert("請務必填寫「寺廟名稱」、「縣市」與「鄉鎮市區」！");
+    return;
+  }
+
+  const safeSourceUrl = sanitizeExternalUrl(rawSource);
+  if (rawSource && !safeSourceUrl) {
+    alert("資料來源網址格式無效，請使用 http:// 或 https:// 開頭的合法網址！");
+    return;
+  }
+
+  let lat = null;
+  let lon = null;
+  if (latStr !== "" || lonStr !== "") {
+    lat = parseFloat(latStr);
+    lon = parseFloat(lonStr);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+      alert("請輸入有效的 WGS84 經緯度座標（或兩欄皆留空）！");
+      return;
+    }
+  }
+
+  const saveBtn = document.getElementById("btn-save-temple-editor");
+  const origHtml = saveBtn ? saveBtn.innerHTML : "";
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = "儲存中...";
+  }
+
+  try {
+    const isEdit = Boolean(existingId);
+    const id = isEdit ? existingId : `custom_${Date.now()}`;
+    const isBase = BASE_TEMPLES_DATA.some(b => b.id === id);
+    const prevTemple = isEdit ? (TEMPLES_DATA.find(t => t.id === id) || templeOverridesMap[id]) : null;
+
+    const overrideRecord = {
+      id,
+      name,
+      county,
+      district,
+      address,
+      lat,
+      lon,
+      mainDeity,
+      religion: prevTemple?.religion || "道",
+      year,
+      sourceUrl: safeSourceUrl,
+      _deleted: false,
+      isCustom: !isBase,
+      updatedAt: new Date().toISOString()
+    };
+
+    templeOverridesMap[id] = overrideRecord;
+    if (db.templeOverrides) {
+      await db.templeOverrides.put(overrideRecord);
+    }
+
+    rebuildTemplesData();
+    renderAllViews();
+
+    await syncTempleOverrideToCloud(id, overrideRecord);
+
+    const detailModal = document.getElementById("temple-modal");
+    if (detailModal && !detailModal.classList.contains("hidden") && currentActiveTemple?.id === id) {
+      await window.openTempleModal(id);
+    }
+
+    closeTempleEditorDialog();
+
+    const mapView = document.getElementById("view-map");
+    if (mapView && !mapView.classList.contains("hidden") && typeof map !== "undefined" && map && lat !== null && lon !== null) {
+      map.setView([lat, lon], Math.max(map.getZoom(), 14));
+    }
+  } catch (err) {
+    console.error("儲存寺廟資料失敗:", err);
+    alert("儲存寺廟資料失敗：" + err.message);
+  } finally {
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.innerHTML = origHtml;
+      if (window.lucide) lucide.createIcons();
+    }
+  }
+}
+
+async function deleteTempleFromEditor() {
+  if (!currentUser) {
+    alert("權限不足：請先使用 Google 帳號登入後才能刪除寺廟資料！");
+    return;
+  }
+
+  const id = document.getElementById("editor-temple-id")?.value.trim() || "";
+  const name = document.getElementById("editor-temple-name")?.value.trim() || "此寺廟";
+  if (!id) return;
+
+  if (!confirm(`確定要刪除「${name}」嗎？\n刪除後該寺廟將從地圖、名錄與統計中隱藏，並同步至您的雲端帳號（若需恢復系統預設寺廟，可透過本機重設資料）。`)) {
+    return;
+  }
+
+  const deleteBtn = document.getElementById("btn-editor-delete");
+  const origHtml = deleteBtn ? deleteBtn.innerHTML : "";
+  if (deleteBtn) {
+    deleteBtn.disabled = true;
+    deleteBtn.textContent = "刪除中...";
+  }
+
+  try {
+    const deleteRecord = {
+      id,
+      _deleted: true,
+      updatedAt: new Date().toISOString()
+    };
+
+    templeOverridesMap[id] = deleteRecord;
+    if (db.templeOverrides) {
+      await db.templeOverrides.put(deleteRecord);
+    }
+
+    if (Array.isArray(plannerCalculatedRoute)) {
+      plannerCalculatedRoute = plannerCalculatedRoute.filter(t => t.id !== id);
+    }
+
+    rebuildTemplesData();
+    await reconcilePlannedStatus();
+    renderAllViews();
+
+    await syncTempleOverrideToCloud(id, deleteRecord);
+
+    closeTempleEditorDialog();
+
+    if (currentActiveTemple?.id === id) {
+      document.getElementById("temple-modal")?.classList.add("hidden");
+      currentActiveTemple = null;
+    }
+  } catch (err) {
+    console.error("刪除寺廟資料失敗:", err);
+    alert("刪除寺廟資料失敗：" + err.message);
+  } finally {
+    if (deleteBtn) {
+      deleteBtn.disabled = false;
+      deleteBtn.innerHTML = origHtml;
+      if (window.lucide) lucide.createIcons();
+    }
+  }
+}
