@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <title>參拜足跡｜全台玄天上帝廟朝聖地圖與參拜筆記</title>
   <meta name="description" content="全台732間玄天上帝廟互動式朝聖地圖、參拜打卡、圖文心得筆記與進度追蹤">
+  <meta name="color-scheme" content="dark">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com https://www.gstatic.com https://apis.google.com https://www.googletagmanager.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; img-src 'self' data: blob: https://*.google.com https://*.googleapis.com https://wmts.nlsc.gov.tw https://*.tile.openstreetmap.org https://tile.openstreetmap.org https://*.basemaps.cartocdn.com https://*.tile.opentopomap.org https://tile.opentopomap.org https://cdnjs.cloudflare.com https://firebasestorage.googleapis.com https://lh3.googleusercontent.com https://ui-avatars.com https://*.google-analytics.com https://*.googletagmanager.com; connect-src 'self' https://*.google.com https://*.googleapis.com https://wmts.nlsc.gov.tw https://*.basemaps.cartocdn.com https://*.tile.openstreetmap.org https://tile.openstreetmap.org https://*.tile.opentopomap.org https://tile.opentopomap.org https://*.openstreetmap.org https://nominatim.openstreetmap.org https://photon.komoot.io https://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://firebasestorage.googleapis.com https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com; frame-src 'self' https://*.firebaseapp.com https://accounts.google.com; font-src 'self' https://fonts.gstatic.com data:;">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
@@ -18,12 +19,18 @@
         extend: {
           colors: {
             brand: {
-              50: '#f6f7f9',
-              100: '#eceff2',
-              500: '#1b3b52',
-              600: '#132c3f',
-              gold: '#d4af37',
-              goldDark: '#b89025'
+              50: '#2a0a0d',
+              100: '#450a0a',
+              200: '#7f1d1d',
+              300: '#fca5a5',
+              400: '#f87171',
+              500: '#dc2626',
+              600: '#b91c1c',
+              700: '#991b1b',
+              900: '#18181b',
+              950: '#09090b',
+              gold: '#ef4444',
+              goldDark: '#991b1b'
             }
           }
         }
@@ -53,6 +60,19 @@
   <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-storage-compat.js"></script>
 
   <style>
+    :root {
+      color-scheme: dark;
+      accent-color: #dc2626;
+      --scrollbar-track: #18181b;
+      --scrollbar-thumb: #52525b;
+      scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+    }
+
+    ::selection {
+      background-color: #b91c1c;
+      color: #ffffff;
+    }
+
     /* Reset & Mobile Viewport Lock (動態視窗高度鎖定，防止手機網址列推擠底欄) */
     html, body {
       height: 100%;
@@ -67,12 +87,17 @@
       top: 0;
       right: 0;
       bottom: 0;
+      background-color: #09090b;
+      color: #f4f4f5;
     }
 
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: #f1f1f1; }
-    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 999px; }
-    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    /* Legacy fallback for browsers without standard scrollbar-color */
+    @supports not (scrollbar-color: auto) {
+      ::-webkit-scrollbar { width: 10px; height: 10px; }
+      ::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+      ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 999px; }
+      ::-webkit-scrollbar-thumb:hover { background: #71717a; }
+    }
 
     #view-map {
       position: relative;
@@ -91,53 +116,68 @@
       width: 100% !important;
       height: 100% !important;
       z-index: 1;
-      background-color: #e5e9ec;
+      background-color: #18181b;
     }
 
-    .marker-cluster-small { background-color: rgba(212, 175, 55, 0.4); }
-    .marker-cluster-small div { background-color: rgba(212, 175, 55, 0.85); color: #fff; font-weight: bold; }
-    .marker-cluster-medium { background-color: rgba(27, 59, 82, 0.4); }
-    .marker-cluster-medium div { background-color: rgba(27, 59, 82, 0.85); color: #fff; font-weight: bold; }
-    .marker-cluster-large { background-color: rgba(19, 44, 63, 0.5); }
-    .marker-cluster-large div { background-color: rgba(19, 44, 63, 0.95); color: #fff; font-weight: bold; }
+    /* 玄天上帝黑紅灰階聚類標記 */
+    .marker-cluster-small { background-color: rgba(63, 63, 70, 0.55); }
+    .marker-cluster-small div { background-color: #27272a; color: #fafafa; font-weight: bold; border: 1px solid #52525b; }
+    .marker-cluster-medium { background-color: rgba(185, 28, 28, 0.45); }
+    .marker-cluster-medium div { background-color: #991b1b; color: #ffffff; font-weight: bold; border: 1px solid #ef4444; }
+    .marker-cluster-large { background-color: rgba(127, 29, 29, 0.6); }
+    .marker-cluster-large div { background-color: #18181b; color: #fca5a5; font-weight: 900; border: 2px solid #dc2626; box-shadow: 0 0 12px rgba(220, 38, 38, 0.45); }
 
+    /* Leaflet Control Layers (Dark Theme) */
     .leaflet-control-layers {
       border-radius: 12px !important;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.15) !important;
-      border: 1px solid #e2e8f0 !important;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.6) !important;
+      border: 1px solid #3f3f46 !important;
+      background-color: rgba(24, 24, 27, 0.95) !important;
+      color: #f4f4f5 !important;
       font-size: 12px !important;
       padding: 6px 10px !important;
     }
+    .leaflet-control-layers-toggle {
+      background-color: #18181b !important;
+      filter: invert(0.92);
+    }
 
     .leaflet-control-zoom {
-      border: none !important;
+      border: 1px solid #3f3f46 !important;
       border-radius: 12px !important;
       overflow: hidden;
-      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15) !important;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5) !important;
       margin-bottom: 24px !important;
       margin-right: 14px !important;
     }
     .leaflet-control-zoom a {
-      background-color: #ffffff !important;
-      color: #1e293b !important;
+      background-color: #18181b !important;
+      color: #f4f4f5 !important;
       width: 34px !important;
       height: 34px !important;
       line-height: 34px !important;
       font-size: 18px !important;
       font-weight: bold !important;
-      border-bottom: 1px solid #f1f5f9 !important;
+      border-bottom: 1px solid #27272a !important;
       transition: background-color 0.15s, color 0.15s;
     }
     .leaflet-control-zoom a:hover {
-      background-color: #f8fafc !important;
-      color: #0f172a !important;
+      background-color: #27272a !important;
+      color: #f87171 !important;
     }
 
-    /* Leaflet Popup Styling */
+    /* Leaflet Popup Styling (玄黑朱紅暗色卡片) */
     .leaflet-popup-content-wrapper {
       border-radius: 16px !important;
-      box-shadow: 0 12px 30px -4px rgba(0, 0, 0, 0.18), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
+      background-color: #18181b !important;
+      color: #f4f4f5 !important;
+      border: 1px solid #3f3f46 !important;
+      box-shadow: 0 14px 32px -4px rgba(0, 0, 0, 0.65), 0 4px 10px -2px rgba(185, 28, 28, 0.2) !important;
       padding: 2px !important;
+    }
+    .leaflet-popup-tip {
+      background-color: #18181b !important;
+      border: 1px solid #3f3f46 !important;
     }
     .leaflet-popup-content {
       margin: 14px 16px !important;
@@ -152,20 +192,20 @@
       align-items: center !important;
       justify-content: center !important;
       border-radius: 9999px !important;
-      background-color: #f1f5f9 !important;
-      color: #64748b !important;
+      background-color: #27272a !important;
+      color: #a1a1aa !important;
       font-size: 15px !important;
       font-family: inherit !important;
       line-height: 1 !important;
       padding: 0 !important;
       text-decoration: none !important;
       z-index: 30 !important;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4) !important;
       transition: all 0.15s ease !important;
     }
     .leaflet-popup-close-button:hover {
-      background-color: #e2e8f0 !important;
-      color: #0f172a !important;
+      background-color: #b91c1c !important;
+      color: #ffffff !important;
       transform: scale(1.05);
     }
 
@@ -184,48 +224,58 @@
       justify-content: center;
     }
     #photo-lightbox-dialog::backdrop {
-      background: rgba(15, 23, 42, 0.9);
+      background: rgba(9, 9, 11, 0.92);
       backdrop-filter: blur(4px);
+    }
+
+    /* Forced Colors Mode Accessibility */
+    @media (forced-colors: active) {
+      button, select, input, textarea, .nav-tab {
+        border: 1px solid ButtonText;
+      }
+      .nav-tab.active {
+        outline: 2px solid Highlight;
+      }
     }
   </style>
 </head>
-<body class="bg-slate-50 text-slate-800 antialiased flex flex-col h-full overflow-hidden">
+<body class="bg-zinc-950 text-zinc-100 antialiased flex flex-col h-full overflow-hidden">
 
-  <!-- Top Navbar -->
-  <header class="bg-brand-600 text-white shadow-md z-30 shrink-0">
+  <!-- Top Navbar (玄天上帝・玄黑朱砂主題) -->
+  <header class="bg-zinc-950 text-zinc-100 border-b border-red-900/50 shadow-lg z-30 shrink-0">
     <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
       <div class="flex items-center space-x-3">
-        <div class="w-10 h-10 rounded-full bg-brand-gold flex items-center justify-center text-brand-600 font-black shadow-inner text-sm tracking-tight shrink-0">
+        <div class="w-10 h-10 rounded-full bg-gradient-to-br from-red-700 to-red-900 flex items-center justify-center text-zinc-50 font-black border border-red-500/60 shadow-[0_0_12px_rgba(185,28,28,0.45)] text-sm tracking-tight shrink-0">
           玄帝
         </div>
         <div>
-          <h1 class="font-bold text-lg leading-tight tracking-wide flex items-center gap-2">
+          <h1 class="font-bold text-lg leading-tight tracking-wide flex items-center gap-2 text-zinc-50">
             參拜足跡
-            <span class="text-xs bg-brand-gold/30 text-amber-200 border border-brand-gold/50 px-2 py-0.5 rounded-full font-normal">全台 732 廟</span>
+            <span class="text-xs bg-red-950/90 text-red-300 border border-red-800/70 px-2 py-0.5 rounded-full font-normal">全台 732 廟</span>
           </h1>
-          <p class="text-xs text-slate-300">朝聖地圖・雲端同步・圖文記事</p>
+          <p class="text-xs text-zinc-400">朝聖地圖・雲端同步・圖文記事</p>
         </div>
       </div>
 
       <!-- Right Header Actions (Stats & Google Auth) -->
       <div class="flex items-center space-x-2 md:space-x-3">
         <!-- Quick Visited Count -->
-        <div id="stat-badge" class="hidden sm:flex bg-white/10 backdrop-blur px-3 py-1.5 rounded-xl border border-white/20 text-xs items-center gap-2">
+        <div id="stat-badge" class="hidden sm:flex bg-zinc-900 px-3 py-1.5 rounded-xl border border-zinc-800 text-xs items-center gap-2 text-zinc-200">
           <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400"></i>
-          <span>已參拜: <strong id="header-visited-count" class="text-emerald-400 font-bold">0</strong> / 732 (<span id="header-percent">0%</span>)</span>
+          <span>已參拜: <strong id="header-visited-count" class="text-emerald-400 font-bold">0</strong> / 732 (<span id="header-percent" class="text-red-300 font-semibold">0%</span>)</span>
         </div>
 
         <!-- Cloud Sync Status Badge -->
-        <div id="cloud-status-badge" onclick="switchView('settings')" class="cursor-pointer bg-white/10 hover:bg-white/20 transition px-2.5 py-1.5 rounded-xl border border-white/20 text-[11px] flex items-center gap-1.5 select-none" title="點擊檢視雲端同步與對齊狀態">
-          <span id="cloud-indicator" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0"></span>
-          <span id="cloud-status-text" class="text-slate-200 truncate max-w-[90px] sm:max-w-none">本地快取</span>
+        <div id="cloud-status-badge" onclick="switchView('settings')" class="cursor-pointer bg-zinc-900 hover:bg-zinc-800 transition px-2.5 py-1.5 rounded-xl border border-zinc-800 text-[11px] flex items-center gap-1.5 select-none" title="點擊檢視雲端同步與對齊狀態">
+          <span id="cloud-indicator" class="w-2 h-2 rounded-full bg-red-400 animate-pulse shrink-0"></span>
+          <span id="cloud-status-text" class="text-zinc-300 truncate max-w-[90px] sm:max-w-none">本地快取</span>
         </div>
 
         <!-- User Profile (已登入時呈現於右上角) -->
         <div id="auth-container">
           <div id="user-profile" class="hidden items-center gap-2">
-            <img id="user-avatar" class="w-8 h-8 rounded-full border border-brand-gold shadow" src="" alt="avatar" />
-            <button id="btn-logout" title="登出" class="text-xs text-slate-300 hover:text-white bg-white/10 hover:bg-white/20 p-1.5 rounded-lg transition">
+            <img id="user-avatar" class="w-8 h-8 rounded-full border border-red-600 shadow" src="" alt="avatar" />
+            <button id="btn-logout" title="登出" class="text-xs text-zinc-300 hover:text-white bg-zinc-900 hover:bg-red-900/70 border border-zinc-800 p-1.5 rounded-lg transition">
               <i data-lucide="log-out" class="w-4 h-4"></i>
             </button>
           </div>
@@ -242,22 +292,22 @@
       <!-- Leaflet 地圖實體掛載容器 -->
       <div id="map"></div>
 
-      <div class="absolute top-3 left-3 right-3 md:left-6 md:right-auto md:w-96 z-[1000] bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-slate-200 p-3 space-y-2.5 transition-all">
+      <div class="absolute top-3 left-3 right-3 md:left-6 md:right-auto md:w-96 z-[1000] bg-zinc-950/95 backdrop-blur-md rounded-2xl shadow-2xl border border-zinc-800 p-3 space-y-2.5 transition-all">
         <div class="flex items-center gap-2">
           <div class="relative flex-1">
-            <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-3"></i>
-            <input type="text" id="map-search" placeholder="搜尋廟名、鄉鎮或地址..." class="w-full pl-9 pr-8 py-2 text-sm bg-slate-100 rounded-xl border border-transparent focus:border-brand-500 focus:bg-white focus:outline-none transition" />
-            <button id="clear-search" class="hidden absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600">
+            <i data-lucide="search" class="w-4 h-4 text-zinc-400 absolute left-3 top-3"></i>
+            <input type="text" id="map-search" placeholder="搜尋廟名、鄉鎮或地址..." class="w-full pl-9 pr-8 py-2 text-sm text-zinc-100 placeholder:text-zinc-400 bg-zinc-900 rounded-xl border border-zinc-700/80 focus:border-red-500 focus:bg-zinc-950 focus:outline-none transition" />
+            <button id="clear-search" class="hidden absolute right-2.5 top-2.5 text-zinc-400 hover:text-zinc-100">
               <i data-lucide="x" class="w-4 h-4"></i>
             </button>
           </div>
-          <button id="btn-recenter" title="重置視角至全台" class="p-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-slate-700 transition">
+          <button id="btn-recenter" title="重置視角至全台" class="p-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700/80 rounded-xl text-zinc-200 hover:text-red-400 transition">
             <i data-lucide="crosshair" class="w-5 h-5"></i>
           </button>
         </div>
 
         <div class="flex items-center gap-2 text-xs">
-          <select id="filter-county" class="flex-1 bg-slate-100 py-1.5 px-2.5 rounded-lg border border-slate-200 text-slate-700 focus:outline-none focus:border-brand-500">
+          <select id="filter-county" class="flex-1 bg-zinc-900 py-1.5 px-2.5 rounded-lg border border-zinc-700 text-zinc-200 focus:outline-none focus:border-red-500">
             <option value="">全部縣市 (732)</option>
             <option value="臺南市">臺南市 (96)</option>
             <option value="高雄市">高雄市 (96)</option>
@@ -282,22 +332,22 @@
             <option value="新竹市">新竹市 (3)</option>
             <option value="新竹縣">新竹縣 (3)</option>
           </select>
-          <select id="filter-status" class="bg-slate-100 py-1.5 px-2.5 rounded-lg border border-slate-200 text-slate-700 focus:outline-none focus:border-brand-500">
+          <select id="filter-status" class="bg-zinc-900 py-1.5 px-2.5 rounded-lg border border-zinc-700 text-zinc-200 focus:outline-none focus:border-red-500">
             <option value="all">全部狀態</option>
             <option value="visited">🟢 已參拜</option>
-            <option value="planned">🟡 規劃中</option>
-            <option value="unvisited">⚪ 未參拜</option>
+            <option value="planned">🔴 規劃中</option>
+            <option value="unvisited">⚫ 未參拜</option>
           </select>
         </div>
 
-        <div class="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-100 px-1">
-          <span>符合條件：<strong id="filtered-count" class="text-brand-600 font-bold">732</strong> 間</span>
+        <div class="flex items-center justify-between text-[11px] text-zinc-400 pt-1 border-t border-zinc-800 px-1">
+          <span>符合條件：<strong id="filtered-count" class="text-red-400 font-bold">732</strong> 間</span>
           <div class="flex items-center gap-2">
-            <button type="button" onclick="switchView('planner')" class="text-xs bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-bold px-2.5 py-0.5 rounded-lg flex items-center gap-1 shadow-sm transition">
+            <button type="button" onclick="switchView('planner')" class="text-xs bg-red-700 hover:bg-red-600 active:scale-95 text-white font-bold px-2.5 py-0.5 rounded-lg flex items-center gap-1 shadow-sm transition">
               <i data-lucide="route" class="w-3.5 h-3.5"></i>
               <span>路線規劃</span>
             </button>
-            <span class="text-amber-700 font-medium cursor-pointer hover:underline" onclick="switchCounty('臺南市')">
+            <span class="text-red-300 font-medium cursor-pointer hover:underline" onclick="switchCounty('臺南市')">
               📍 台南 96 廟
             </span>
           </div>
@@ -305,30 +355,30 @@
       </div>
 
       <!-- 進行中行程導航浮動控制條 (有活動路線時顯示) -->
-      <div id="active-route-drawer" class="hidden absolute bottom-4 left-4 right-4 md:left-6 md:right-auto md:w-96 bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-amber-200/80 p-3.5 z-30 space-y-2.5 transition-all">
+      <div id="active-route-drawer" class="hidden absolute bottom-4 left-4 right-4 md:left-6 md:right-auto md:w-96 bg-zinc-950/95 backdrop-blur-md rounded-2xl shadow-2xl border border-red-900/70 p-3.5 z-30 space-y-2.5 transition-all">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
-            <span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
-            <strong id="drawer-route-title" class="text-xs font-bold text-slate-800 line-clamp-1">進行中朝聖路線</strong>
+            <span class="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
+            <strong id="drawer-route-title" class="text-xs font-bold text-zinc-100 line-clamp-1">進行中朝聖路線</strong>
           </div>
           <div class="flex items-center gap-1">
-            <button onclick="toggleRouteDrawerList()" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg text-xs" title="展開/收合站點清單">
+            <button onclick="toggleRouteDrawerList()" class="text-zinc-400 hover:text-zinc-100 p-1 rounded-lg text-xs" title="展開/收合站點清單">
               <i data-lucide="list-ordered" class="w-4 h-4"></i>
             </button>
-            <button onclick="clearActiveRoute()" class="text-rose-500 hover:text-rose-700 p-1 rounded-lg text-xs font-bold" title="結束/清除路線">
+            <button onclick="clearActiveRoute()" class="text-red-400 hover:text-red-300 p-1 rounded-lg text-xs font-bold" title="結束/清除路線">
               <i data-lucide="x" class="w-4 h-4"></i>
             </button>
           </div>
         </div>
 
         <!-- 當前目標站點提示 -->
-        <div class="bg-amber-50 rounded-xl p-2.5 border border-amber-100 flex items-center justify-between">
+        <div class="bg-zinc-900 rounded-xl p-2.5 border border-zinc-800 flex items-center justify-between">
           <div>
-            <span class="text-[10px] text-amber-700 font-bold block" id="drawer-step-index">下一站（第 1 / 8 站）</span>
-            <strong class="text-sm font-bold text-slate-900 line-clamp-1" id="drawer-current-name">開基靈祐宮</strong>
-            <p class="text-[11px] text-slate-400" id="drawer-current-dist">距離前站約 1.2 公里</p>
+            <span class="text-[10px] text-red-400 font-bold block" id="drawer-step-index">下一站（第 1 / 8 站）</span>
+            <strong class="text-sm font-bold text-zinc-50 line-clamp-1" id="drawer-current-name">開基靈祐宮</strong>
+            <p class="text-[11px] text-zinc-400" id="drawer-current-dist">距離前站約 1.2 公里</p>
           </div>
-          <button id="drawer-btn-checkin" onclick="checkinCurrentStop()" class="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold shadow-sm transition active:scale-95 shrink-0 flex items-center gap-1">
+          <button id="drawer-btn-checkin" onclick="checkinCurrentStop()" class="px-2.5 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg text-xs font-bold shadow-sm transition active:scale-95 shrink-0 flex items-center gap-1">
             <i data-lucide="check" class="w-3.5 h-3.5"></i>
             <span>打卡</span>
           </button>
@@ -336,38 +386,38 @@
 
         <!-- 導航動作按鈕 -->
         <div class="flex gap-2">
-          <a id="drawer-btn-nav-stop" href="#" target="_blank" class="flex-1 py-2 bg-sky-500 hover:bg-sky-600 active:scale-95 text-white font-bold rounded-xl text-xs shadow-sm flex items-center justify-center gap-1.5 transition">
+          <a id="drawer-btn-nav-stop" href="#" target="_blank" class="flex-1 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 active:scale-95 text-zinc-100 font-bold rounded-xl text-xs shadow-sm flex items-center justify-center gap-1.5 transition">
             <i data-lucide="navigation" class="w-3.5 h-3.5"></i>
             <span>導航至本站</span>
           </a>
-          <a id="drawer-btn-nav-multi" href="#" target="_blank" class="flex-1 py-2 bg-brand-600 hover:bg-brand-500 active:scale-95 text-white font-bold rounded-xl text-xs shadow-sm flex items-center justify-center gap-1.5 transition" title="使用 Google Maps 多點規劃完整連續導航">
+          <a id="drawer-btn-nav-multi" href="#" target="_blank" class="flex-1 py-2 bg-red-700 hover:bg-red-600 active:scale-95 text-white font-bold rounded-xl text-xs shadow-sm flex items-center justify-center gap-1.5 transition" title="使用 Google Maps 多點規劃完整連續導航">
             <i data-lucide="map" class="w-3.5 h-3.5"></i>
             <span>全程連續導航</span>
           </a>
         </div>
 
         <!-- 展開的站點列表 -->
-        <div id="drawer-stops-list" class="hidden max-h-48 overflow-y-auto space-y-1 pt-1 border-t border-slate-100 text-xs">
+        <div id="drawer-stops-list" class="hidden max-h-48 overflow-y-auto space-y-1 pt-1 border-t border-zinc-800 text-xs">
         </div>
       </div>
 
     </section>
 
     <!-- View: Route Planner (智能朝聖路線規劃器) -->
-    <section id="view-planner" class="hidden flex-1 min-h-0 overflow-y-auto p-4 md:p-6 pb-24 md:pb-8 bg-slate-100">
+    <section id="view-planner" class="hidden flex-1 min-h-0 overflow-y-auto p-4 md:p-6 pb-24 md:pb-8 bg-zinc-950">
       <!-- 1. 路線規劃未登入鎖定畫面 -->
-      <div id="planner-locked-box" class="max-w-md mx-auto my-12 bg-white rounded-3xl p-8 border border-slate-200 shadow-sm text-center space-y-5">
-        <div class="w-16 h-16 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
+      <div id="planner-locked-box" class="max-w-md mx-auto my-12 bg-zinc-900 rounded-3xl p-8 border border-zinc-800 shadow-xl text-center space-y-5">
+        <div class="w-16 h-16 bg-red-950/80 text-red-400 border border-red-900/60 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
           <i data-lucide="lock" class="w-8 h-8"></i>
         </div>
         <div>
-          <h3 class="text-xl font-extrabold text-slate-800">智能路線規劃權限控管</h3>
-          <p class="text-xs text-slate-500 mt-2 leading-relaxed">
+          <h3 class="text-xl font-extrabold text-zinc-100">智能路線規劃權限控管</h3>
+          <p class="text-xs text-zinc-400 mt-2 leading-relaxed">
             自訂出發起點、多區域智慧最佳巡迴路線計算、行程儲存與 Google Maps 連續導航等功能已啟用帳號安全管制。請先使用 Google 帳號登入後即可啟用完整規劃功能。
           </p>
         </div>
-        <button onclick="loginWithGoogle()" class="w-full py-3 px-4 bg-brand-600 hover:bg-brand-500 text-white font-bold rounded-xl text-sm shadow transition flex items-center justify-center gap-2">
-          <svg class="w-4 h-4" viewBox="0 0 24 24">
+        <button onclick="loginWithGoogle()" class="w-full py-3 px-4 bg-red-700 hover:bg-red-600 text-white font-bold rounded-xl text-sm shadow transition flex items-center justify-center gap-2">
+          <svg class="w-4 h-4 bg-white rounded-full p-0.5" viewBox="0 0 24 24">
             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
             <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
             <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
@@ -380,66 +430,66 @@
       <!-- 2. 已登入路線規劃面板 -->
       <div id="planner-content-box" class="hidden max-w-4xl mx-auto space-y-5">
         <!-- 頂部標題與說明 -->
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-zinc-900 p-5 rounded-2xl shadow-lg border border-zinc-800">
           <div>
-            <h2 class="font-bold text-xl text-slate-800 flex items-center gap-2">
-              <i data-lucide="route" class="w-6 h-6 text-amber-500"></i>
+            <h2 class="font-bold text-xl text-zinc-100 flex items-center gap-2">
+              <i data-lucide="route" class="w-6 h-6 text-red-400"></i>
               智能朝聖路線規劃器
             </h2>
-            <p class="text-xs text-slate-500 mt-1">
-              設定出發起點與欲造訪區域（可跨縣市與鄉鎮多選），自動為您運算<strong>未參拜廟宇最佳巡迴路徑</strong>，支援手動調序、儲存行程與 Google Maps 連續導航。
+            <p class="text-xs text-zinc-400 mt-1">
+              設定出發起點與欲造訪區域（可跨縣市與鄉鎮多選），自動為您運算<strong class="text-zinc-200">未參拜廟宇最佳巡迴路徑</strong>，支援手動調序、儲存行程與 Google Maps 連續導航。
             </p>
           </div>
           <div class="flex items-center gap-2 shrink-0">
-            <button type="button" onclick="openSavedItinerariesModal()" class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl flex items-center gap-1.5 transition">
-              <i data-lucide="folder-clock" class="w-4 h-4 text-brand-600"></i>
-              <span>已存行程 (<strong id="saved-itin-count" class="text-brand-600">0</strong>)</span>
+            <button type="button" onclick="openSavedItinerariesModal()" class="px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 text-xs font-bold rounded-xl flex items-center gap-1.5 transition">
+              <i data-lucide="folder-clock" class="w-4 h-4 text-red-400"></i>
+              <span>已存行程 (<strong id="saved-itin-count" class="text-red-300">0</strong>)</span>
             </button>
           </div>
         </div>
 
         <!-- 規劃條件設定卡片 -->
-        <div id="planner-config-card" class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 space-y-5">
+        <div id="planner-config-card" class="bg-zinc-900 rounded-2xl p-5 shadow-lg border border-zinc-800 space-y-5">
           <!-- 步驟 1: 選擇出發起點 -->
           <div class="space-y-3">
             <div class="flex items-center justify-between">
-              <label class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                <span class="w-5 h-5 rounded-full bg-amber-500 text-white flex items-center justify-center text-[11px] font-black">1</span>
+              <label class="text-xs font-bold text-zinc-200 uppercase tracking-wider flex items-center gap-1.5">
+                <span class="w-5 h-5 rounded-full bg-red-700 text-white flex items-center justify-center text-[11px] font-black">1</span>
                 選擇出發起點
               </label>
-              <span id="planner-start-status" class="text-[11px] text-emerald-600 font-bold"></span>
+              <span id="planner-start-status" class="text-[11px] text-emerald-400 font-bold"></span>
             </div>
 
             <!-- 起點切換 Segment -->
-            <div class="grid grid-cols-3 gap-2 p-1 bg-slate-100 rounded-xl text-xs font-bold text-slate-600">
-              <button type="button" id="btn-start-mode-gps" onclick="setStartMode('gps')" class="py-2 rounded-lg bg-white text-brand-600 shadow-sm transition flex items-center justify-center gap-1">
+            <div class="grid grid-cols-3 gap-2 p-1 bg-zinc-950 border border-zinc-800 rounded-xl text-xs font-bold text-zinc-400">
+              <button type="button" id="btn-start-mode-gps" onclick="setStartMode('gps')" class="py-2 rounded-lg bg-red-700 text-white shadow-sm transition flex items-center justify-center gap-1">
                 <i data-lucide="crosshair" class="w-3.5 h-3.5"></i> 目前定位
               </button>
-              <button type="button" id="btn-start-mode-temple" onclick="setStartMode('temple')" class="py-2 rounded-lg text-slate-600 hover:text-slate-900 transition flex items-center justify-center gap-1">
+              <button type="button" id="btn-start-mode-temple" onclick="setStartMode('temple')" class="py-2 rounded-lg text-zinc-400 hover:text-zinc-100 transition flex items-center justify-center gap-1">
                 <i data-lucide="landmark" class="w-3.5 h-3.5"></i> 指定廟宇
               </button>
-              <button type="button" id="btn-start-mode-custom" onclick="setStartMode('custom')" class="py-2 rounded-lg text-slate-600 hover:text-slate-900 transition flex items-center justify-center gap-1">
+              <button type="button" id="btn-start-mode-custom" onclick="setStartMode('custom')" class="py-2 rounded-lg text-zinc-400 hover:text-zinc-100 transition flex items-center justify-center gap-1">
                 <i data-lucide="map-pin" class="w-3.5 h-3.5"></i> 自訂地點
               </button>
             </div>
 
             <!-- 起點內容區塊 -->
-            <div id="start-panel-gps" class="p-3.5 bg-amber-50/70 rounded-xl border border-amber-100 flex items-center justify-between text-xs">
+            <div id="start-panel-gps" class="p-3.5 bg-zinc-950 rounded-xl border border-zinc-800 flex items-center justify-between text-xs">
               <div class="flex items-center gap-2">
-                <i data-lucide="locate" class="w-4 h-4 text-amber-600"></i>
-                <span id="gps-status-text" class="text-slate-700 font-medium">尚未取得 GPS 定位</span>
+                <i data-lucide="locate" class="w-4 h-4 text-red-400"></i>
+                <span id="gps-status-text" class="text-zinc-300 font-medium">尚未取得 GPS 定位</span>
               </div>
-              <button type="button" onclick="requestCurrentLocation()" class="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-bold rounded-lg transition shadow-sm">
+              <button type="button" onclick="requestCurrentLocation()" class="px-3.5 py-1.5 bg-red-700 hover:bg-red-600 active:scale-95 text-white font-bold rounded-lg transition shadow-sm">
                 取得定位
               </button>
             </div>
 
             <div id="start-panel-temple" class="hidden space-y-2">
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <select id="start-temple-county" onchange="onStartTempleCountyChange(this.value)" class="text-xs p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white">
+                <select id="start-temple-county" onchange="onStartTempleCountyChange(this.value)" class="text-xs p-2.5 rounded-xl border border-zinc-700 bg-zinc-950 text-zinc-100 focus:border-red-500 focus:outline-none">
                   <option value="">請先選擇縣市</option>
                 </select>
-                <select id="start-temple-select" onchange="onStartTempleSelect(this.value)" class="text-xs p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white" disabled>
+                <select id="start-temple-select" onchange="onStartTempleSelect(this.value)" class="text-xs p-2.5 rounded-xl border border-zinc-700 bg-zinc-950 text-zinc-100 focus:border-red-500 focus:outline-none disabled:opacity-50" disabled>
                   <option value="">請選擇廟宇作為起點</option>
                 </select>
               </div>
@@ -447,42 +497,42 @@
 
             <div id="start-panel-custom" class="hidden space-y-2">
               <div class="flex gap-2">
-                <input type="text" id="start-custom-address" placeholder="輸入起點地址或地標（如：台南火車站、高鐵左營站）" class="flex-1 text-xs p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:border-brand-500" />
-                <button type="button" onclick="geocodeCustomAddress()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold shrink-0 transition">
+                <input type="text" id="start-custom-address" placeholder="輸入起點地址或地標（如：台南火車站、高鐵左營站）" class="flex-1 text-xs p-2.5 rounded-xl border border-zinc-700 bg-zinc-950 text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:border-red-500" />
+                <button type="button" onclick="geocodeCustomAddress()" class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-100 rounded-xl text-xs font-bold shrink-0 transition">
                   搜尋定位
                 </button>
               </div>
               <!-- 快捷起點 -->
-              <div class="flex items-center gap-1.5 flex-wrap text-[11px] text-slate-500 pt-1">
+              <div class="flex items-center gap-1.5 flex-wrap text-[11px] text-zinc-400 pt-1">
                 <span>推薦快捷起點：</span>
-                <button type="button" onclick="setPresetStart('台南火車站', 22.9972, 120.2128)" class="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded-md font-medium">台南火車站</button>
-                <button type="button" onclick="setPresetStart('高鐵左營站', 22.6874, 120.3082)" class="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded-md font-medium">高鐵左營站</button>
-                <button type="button" onclick="setPresetStart('高鐵台中站', 24.1121, 120.6157)" class="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded-md font-medium">高鐵台中站</button>
-                <button type="button" onclick="setPresetStart('名間松柏嶺受天宮', 23.8344, 120.6601)" class="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded-md font-medium">松柏嶺受天宮</button>
-                <button type="button" onclick="setPresetStart('台南北極殿(大上帝廟)', 22.9951, 120.2072)" class="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded-md font-medium">台南北極殿</button>
+                <button type="button" onclick="setPresetStart('台南火車站', 22.9972, 120.2128)" class="px-2 py-0.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-md font-medium transition">台南火車站</button>
+                <button type="button" onclick="setPresetStart('高鐵左營站', 22.6874, 120.3082)" class="px-2 py-0.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-md font-medium transition">高鐵左營站</button>
+                <button type="button" onclick="setPresetStart('高鐵台中站', 24.1121, 120.6157)" class="px-2 py-0.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-md font-medium transition">高鐵台中站</button>
+                <button type="button" onclick="setPresetStart('名間松柏嶺受天宮', 23.8344, 120.6601)" class="px-2 py-0.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-md font-medium transition">松柏嶺受天宮</button>
+                <button type="button" onclick="setPresetStart('台南北極殿(大上帝廟)', 22.9951, 120.2072)" class="px-2 py-0.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-md font-medium transition">台南北極殿</button>
               </div>
             </div>
           </div>
 
           <!-- 步驟 2: 設定區域 (可多選) -->
-          <div class="space-y-3 pt-4 border-t border-slate-100">
-            <div class="flex items-center justify-between">
-              <label class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                <span class="w-5 h-5 rounded-full bg-amber-500 text-white flex items-center justify-center text-[11px] font-black">2</span>
+          <div class="space-y-3 pt-4 border-t border-zinc-800">
+            <div class="flex items-center justify-between gap-2 flex-wrap">
+              <label class="text-xs font-bold text-zinc-200 uppercase tracking-wider flex items-center gap-1.5">
+                <span class="w-5 h-5 rounded-full bg-red-700 text-white flex items-center justify-center text-[11px] font-black">2</span>
                 設定參拜區域（可跨縣市與多鄉鎮複選）
               </label>
-              <span id="planner-region-stats" class="text-xs text-amber-700 font-bold bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200">
+              <span id="planner-region-stats" class="text-xs text-red-300 font-bold bg-red-950/70 px-2.5 py-1 rounded-full border border-red-800/70">
                 已選 0 區域（未參拜 0 廟）
               </span>
             </div>
 
             <!-- 縣市切換列 -->
             <div class="space-y-2">
-              <div class="text-[11px] text-slate-500 flex items-center justify-between">
+              <div class="text-[11px] text-zinc-400 flex items-center justify-between">
                 <span>選擇縣市檢視其行政區：</span>
                 <div class="space-x-3">
-                  <button type="button" onclick="selectAllDistrictsInCurrentCounty()" class="text-brand-600 font-bold hover:underline">全選當前縣市鄉鎮</button>
-                  <button type="button" onclick="clearAllSelectedDistricts()" class="text-slate-400 hover:underline">全部清空</button>
+                  <button type="button" onclick="selectAllDistrictsInCurrentCounty()" class="text-red-400 font-bold hover:underline">全選當前縣市鄉鎮</button>
+                  <button type="button" onclick="clearAllSelectedDistricts()" class="text-zinc-400 hover:text-zinc-200 hover:underline">全部清空</button>
                 </div>
               </div>
               <div id="planner-county-chips" class="flex gap-1.5 overflow-x-auto pb-1.5 scrollbar-none">
@@ -491,23 +541,23 @@
             </div>
 
             <!-- 當前縣市的鄉鎮複選區 -->
-            <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2">
+            <div class="bg-zinc-950 p-3.5 rounded-xl border border-zinc-800 space-y-2">
               <div class="flex items-center justify-between gap-2">
-                <span class="text-xs font-bold text-slate-700 truncate" id="planner-current-county-label">臺南市 行政區選擇</span>
-                <div class="inline-flex items-center rounded-lg border border-slate-200 bg-white p-0.5 shadow-2xs shrink-0">
+                <span class="text-xs font-bold text-zinc-200 truncate" id="planner-current-county-label">臺南市 行政區選擇</span>
+                <div class="inline-flex items-center rounded-lg border border-zinc-700 bg-zinc-900 p-0.5 shrink-0">
                   <button type="button" onclick="selectAllDistrictsInCurrentCounty()" 
-                    class="px-2.5 py-1 rounded-md text-xs font-bold text-amber-700 hover:bg-amber-50 active:bg-amber-100 transition flex items-center gap-1 cursor-pointer"
+                    class="px-2.5 py-1 rounded-md text-xs font-bold text-red-300 hover:bg-red-950/80 active:bg-red-900 transition flex items-center gap-1 cursor-pointer"
                     title="全選當前縣市所有行政區">
-                    <svg class="w-3.5 h-3.5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg class="w-3.5 h-3.5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
                     </svg>
                     <span>全選</span>
                   </button>
-                  <div class="w-px h-3.5 bg-slate-200 self-center"></div>
+                  <div class="w-px h-3.5 bg-zinc-700 self-center"></div>
                   <button type="button" onclick="deselectAllDistrictsInCurrentCounty()" 
-                    class="px-2.5 py-1 rounded-md text-xs font-bold text-slate-600 hover:bg-rose-50 hover:text-rose-600 active:bg-rose-100 transition flex items-center gap-1 cursor-pointer"
+                    class="px-2.5 py-1 rounded-md text-xs font-bold text-zinc-300 hover:bg-zinc-800 hover:text-red-400 active:bg-zinc-700 transition flex items-center gap-1 cursor-pointer"
                     title="取消當前縣市所有行政區勾選">
-                    <svg class="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg class="w-3.5 h-3.5 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
                     <span>全取消</span>
@@ -520,21 +570,21 @@
             </div>
 
             <!-- 已勾選的整體摘要標籤 -->
-            <div id="planner-selected-summary" class="hidden flex flex-wrap gap-1.5 p-2.5 bg-amber-50/50 rounded-xl border border-dashed border-amber-300 text-xs">
+            <div id="planner-selected-summary" class="hidden flex flex-wrap gap-1.5 p-2.5 bg-red-950/30 rounded-xl border border-dashed border-red-800/70 text-xs">
               <!-- 已選取的區塊標籤動態注入 -->
             </div>
           </div>
 
           <!-- 步驟 3: 路線規劃偏好與條件 -->
-          <div class="space-y-3 pt-4 border-t border-slate-100">
-            <label class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-              <span class="w-5 h-5 rounded-full bg-amber-500 text-white flex items-center justify-center text-[11px] font-black">3</span>
+          <div class="space-y-3 pt-4 border-t border-zinc-800">
+            <label class="text-xs font-bold text-zinc-200 uppercase tracking-wider flex items-center gap-1.5">
+              <span class="w-5 h-5 rounded-full bg-red-700 text-white flex items-center justify-center text-[11px] font-black">3</span>
               規劃偏好與數量上限
             </label>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
               <div class="space-y-1">
-                <label class="font-semibold text-slate-600">造訪廟宇數量上限</label>
-                <select id="planner-max-count" class="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white font-medium">
+                <label class="font-semibold text-zinc-300">造訪廟宇數量上限</label>
+                <select id="planner-max-count" class="w-full p-2.5 rounded-xl border border-zinc-700 bg-zinc-950 text-zinc-100 focus:border-red-500 focus:outline-none font-medium">
                   <option value="999">全部排入（區域內所有未參拜廟宇）</option>
                   <option value="5">精選 5 廟（約 2-3 小時輕量漫遊）</option>
                   <option value="8" selected>精選 8 廟（約半日充實朝聖）</option>
@@ -543,11 +593,11 @@
                 </select>
               </div>
               <div class="space-y-1">
-                <label class="font-semibold text-slate-600">包含狀態篩選</label>
+                <label class="font-semibold text-zinc-300">包含狀態篩選</label>
                 <div class="flex items-center gap-2 pt-2">
                   <label class="inline-flex items-center cursor-pointer">
-                    <input type="checkbox" id="planner-include-planned" checked class="rounded border-slate-300 text-amber-600 focus:ring-amber-500 w-4 h-4">
-                    <span class="ml-2 text-xs text-slate-700">一併排入已標註「規劃中 (🟡)」之廟宇</span>
+                    <input type="checkbox" id="planner-include-planned" checked class="rounded border-zinc-600 text-red-600 focus:ring-red-500 w-4 h-4">
+                    <span class="ml-2 text-xs text-zinc-300">一併排入已標註「規劃中 (🔴)」之廟宇</span>
                   </label>
                 </div>
               </div>
@@ -556,42 +606,42 @@
 
           <!-- 開始運算按鈕 -->
           <div class="pt-2">
-            <button type="button" onclick="calculateOptimizedRoute()" id="btn-start-optimize" class="w-full py-3.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 active:scale-[0.99] text-white font-bold rounded-2xl shadow-lg shadow-amber-500/25 flex items-center justify-center gap-2 text-sm transition">
-              <i data-lucide="sparkles" class="w-5 h-5 text-amber-200"></i>
+            <button type="button" onclick="calculateOptimizedRoute()" id="btn-start-optimize" class="w-full py-3.5 bg-gradient-to-r from-red-700 to-red-800 hover:from-red-600 hover:to-red-700 active:scale-[0.99] text-white font-bold rounded-2xl border border-red-500/40 shadow-lg shadow-red-950/60 flex items-center justify-center gap-2 text-sm transition">
+              <i data-lucide="sparkles" class="w-5 h-5 text-red-200"></i>
               <span>開始智能運算最佳參拜路線</span>
             </button>
           </div>
         </div>
 
         <!-- 運算結果編輯面板 (計算完成後顯示) -->
-        <div id="planner-result-card" class="hidden bg-white rounded-2xl p-5 shadow-sm border border-slate-200 space-y-4">
+        <div id="planner-result-card" class="hidden bg-zinc-900 rounded-2xl p-5 shadow-lg border border-zinc-800 space-y-4">
           <!-- 結果摘要列 -->
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-amber-50/70 border border-amber-200 rounded-2xl">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-zinc-950 border border-red-900/60 rounded-2xl">
             <div>
               <div class="flex items-center gap-2">
-                <span class="text-xs bg-amber-500 text-white font-bold px-2 py-0.5 rounded-full">最佳化成果</span>
-                <input type="text" id="route-name-input" value="臺南市朝聖路線" class="font-bold text-base text-slate-800 bg-transparent border-b border-dashed border-amber-400 focus:outline-none focus:border-amber-600 px-1" />
+                <span class="text-xs bg-red-700 text-white font-bold px-2 py-0.5 rounded-full">最佳化成果</span>
+                <input type="text" id="route-name-input" value="臺南市朝聖路線" class="font-bold text-base text-zinc-100 bg-transparent border-b border-dashed border-red-500/70 focus:outline-none focus:border-red-400 px-1" />
               </div>
-              <div class="flex items-center gap-3 text-xs text-slate-600 mt-2 flex-wrap">
-                <span>⛩️ 造訪廟宇：<strong id="route-stat-stops" class="text-amber-700 font-bold">0</strong> 間</span>
-                <span>📏 總移動里程：<strong id="route-stat-km" class="text-brand-600 font-bold">0.0</strong> 公里</span>
-                <span>⏱️ 預估總耗時：<strong id="route-stat-time" class="text-emerald-700 font-bold">--</strong></span>
+              <div class="flex items-center gap-3 text-xs text-zinc-400 mt-2 flex-wrap">
+                <span>⛩️ 造訪廟宇：<strong id="route-stat-stops" class="text-red-300 font-bold">0</strong> 間</span>
+                <span>📏 總移動里程：<strong id="route-stat-km" class="text-zinc-100 font-bold">0.0</strong> 公里</span>
+                <span>⏱️ 預估總耗時：<strong id="route-stat-time" class="text-emerald-400 font-bold">--</strong></span>
               </div>
             </div>
             <div class="flex gap-2">
-              <button type="button" onclick="recalculateCurrentRoute()" class="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm">
+              <button type="button" onclick="recalculateCurrentRoute()" class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm">
                 <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> 重整
               </button>
-              <button type="button" onclick="resetPlannerToConfig()" class="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition shadow-sm">
+              <button type="button" onclick="resetPlannerToConfig()" class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-xl text-xs font-bold transition shadow-sm">
                 修改條件
               </button>
             </div>
           </div>
 
           <!-- 站點編輯提示 -->
-          <div class="flex items-center justify-between text-xs text-slate-500 px-1">
+          <div class="flex items-center justify-between text-xs text-zinc-400 px-1">
             <span>可自由點擊「▲ / ▼」調換順序或點擊「🗑️」移除個別站點：</span>
-            <button type="button" onclick="openAddTempleToRouteModal()" class="text-brand-600 font-bold hover:underline flex items-center gap-1">
+            <button type="button" onclick="openAddTempleToRouteModal()" class="text-red-400 font-bold hover:underline flex items-center gap-1">
               <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i> 加入其他廟宇
             </button>
           </div>
@@ -602,13 +652,13 @@
           </div>
 
           <!-- 底部操作列：儲存並啟動導航 -->
-          <div class="pt-3 border-t border-slate-100 flex flex-col sm:flex-row gap-3">
-            <button type="button" onclick="saveAndActivateRoute()" class="flex-1 py-3 bg-brand-600 hover:bg-brand-500 active:scale-[0.99] text-white font-bold rounded-xl text-sm shadow-md flex items-center justify-center gap-2 transition">
-              <i data-lucide="bookmark-check" class="w-4 h-4 text-brand-gold"></i>
+          <div class="pt-3 border-t border-zinc-800 flex flex-col sm:flex-row gap-3">
+            <button type="button" onclick="saveAndActivateRoute()" class="flex-1 py-3 bg-red-700 hover:bg-red-600 active:scale-[0.99] text-white font-bold rounded-xl text-sm shadow-md flex items-center justify-center gap-2 transition">
+              <i data-lucide="bookmark-check" class="w-4 h-4 text-red-200"></i>
               <span>儲存並列入規劃中行程（地圖展示導航）</span>
             </button>
-            <a id="btn-export-google-multi" href="#" target="_blank" class="py-3 px-5 bg-sky-500 hover:bg-sky-600 active:scale-[0.99] text-white font-bold rounded-xl text-sm shadow-md flex items-center justify-center gap-2 transition text-center shrink-0">
-              <i data-lucide="map" class="w-4 h-4"></i>
+            <a id="btn-export-google-multi" href="#" target="_blank" class="py-3 px-5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 active:scale-[0.99] text-zinc-100 font-bold rounded-xl text-sm shadow-md flex items-center justify-center gap-2 transition text-center shrink-0">
+              <i data-lucide="map" class="w-4 h-4 text-red-400"></i>
               <span>Google Maps 全程連續導航</span>
             </a>
           </div>
@@ -617,29 +667,29 @@
     </section>
 
     <!-- View: List View -->
-    <section id="view-list" class="hidden flex-1 min-h-0 overflow-y-auto p-4 md:p-6 pb-24 md:pb-8 bg-slate-100">
+    <section id="view-list" class="hidden flex-1 min-h-0 overflow-y-auto p-4 md:p-6 pb-24 md:pb-8 bg-zinc-950">
       <div class="max-w-5xl mx-auto space-y-4">
         <!-- 標題與統計 -->
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
-            <h2 class="font-bold text-xl text-slate-800 flex items-center gap-2">
-              <i data-lucide="list" class="w-6 h-6 text-brand-600"></i>
+            <h2 class="font-bold text-xl text-zinc-100 flex items-center gap-2">
+              <i data-lucide="list" class="w-6 h-6 text-red-400"></i>
               全台廟宇名錄
             </h2>
-            <p class="text-xs text-slate-500 mt-0.5">提供依縣市、鄉鎮市區、參拜狀態及關鍵字交叉多重篩選</p>
+            <p class="text-xs text-zinc-400 mt-0.5">提供依縣市、鄉鎮市區、參拜狀態及關鍵字交叉多重篩選</p>
           </div>
-          <span id="list-total-badge" class="self-start sm:self-auto text-xs bg-brand-100 text-brand-600 px-3 py-1 rounded-full font-bold">
+          <span id="list-total-badge" class="self-start sm:self-auto text-xs bg-red-950/80 text-red-300 border border-red-800/70 px-3 py-1 rounded-full font-bold">
             顯示 732 / 732 間
           </span>
         </div>
 
         <!-- 篩選器控制面板 -->
-        <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-3">
+        <div class="bg-zinc-900 rounded-2xl p-4 shadow-lg border border-zinc-800 space-y-3">
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
             <!-- 縣市下拉選單 -->
             <div>
-              <label class="block text-[11px] font-bold text-slate-500 mb-1">縣市篩選</label>
-              <select id="list-filter-county" class="w-full text-xs p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:border-brand-500 font-medium">
+              <label class="block text-[11px] font-bold text-zinc-400 mb-1">縣市篩選</label>
+              <select id="list-filter-county" class="w-full text-xs p-2.5 rounded-xl border border-zinc-700 bg-zinc-950 text-zinc-100 focus:outline-none focus:border-red-500 font-medium">
                 <option value="">全部縣市 (732)</option>
                 <option value="臺南市">臺南市 (96)</option>
                 <option value="高雄市">高雄市 (96)</option>
@@ -668,43 +718,43 @@
 
             <!-- 鄉鎮市區下拉選單 -->
             <div>
-              <label class="block text-[11px] font-bold text-slate-500 mb-1">鄉鎮市區</label>
-              <select id="list-filter-district" class="w-full text-xs p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:border-brand-500 font-medium" disabled>
+              <label class="block text-[11px] font-bold text-zinc-400 mb-1">鄉鎮市區</label>
+              <select id="list-filter-district" class="w-full text-xs p-2.5 rounded-xl border border-zinc-700 bg-zinc-950 text-zinc-100 focus:outline-none focus:border-red-500 font-medium disabled:opacity-50" disabled>
                 <option value="">請先選擇縣市</option>
               </select>
             </div>
 
             <!-- 參拜狀態篩選 -->
             <div>
-              <label class="block text-[11px] font-bold text-slate-500 mb-1">參拜進度</label>
-              <select id="list-filter-status" class="w-full text-xs p-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:border-brand-500 font-medium">
+              <label class="block text-[11px] font-bold text-zinc-400 mb-1">參拜進度</label>
+              <select id="list-filter-status" class="w-full text-xs p-2.5 rounded-xl border border-zinc-700 bg-zinc-950 text-zinc-100 focus:outline-none focus:border-red-500 font-medium">
                 <option value="all">全部狀態</option>
                 <option value="visited">🟢 已參拜</option>
-                <option value="planned">🟡 規劃中</option>
-                <option value="unvisited">⚪ 未參拜</option>
+                <option value="planned">🔴 規劃中</option>
+                <option value="unvisited">⚫ 未參拜</option>
               </select>
             </div>
 
             <!-- 關鍵字搜尋 -->
             <div>
-              <label class="block text-[11px] font-bold text-slate-500 mb-1">關鍵字搜尋</label>
+              <label class="block text-[11px] font-bold text-zinc-400 mb-1">關鍵字搜尋</label>
               <div class="relative">
-                <input type="text" id="list-filter-search" placeholder="搜尋廟名、地址..." class="w-full text-xs p-2.5 pr-7 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:border-brand-500" />
-                <button id="list-clear-search" class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs">✕</button>
+                <input type="text" id="list-filter-search" placeholder="搜尋廟名、地址..." class="w-full text-xs p-2.5 pr-7 rounded-xl border border-zinc-700 bg-zinc-950 text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:border-red-500" />
+                <button id="list-clear-search" class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-100 text-xs">✕</button>
               </div>
             </div>
           </div>
 
           <!-- 快速標籤列與重設 -->
-          <div class="flex items-center justify-between pt-1 border-t border-slate-100 text-xs">
+          <div class="flex items-center justify-between pt-1 border-t border-zinc-800 text-xs">
             <div class="flex items-center gap-1.5 overflow-x-auto py-0.5">
-              <span class="text-slate-400 shrink-0">快捷篩選：</span>
-              <button onclick="quickFilterList('臺南市')" class="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md font-medium shrink-0">臺南市 (96)</button>
-              <button onclick="quickFilterList('高雄市')" class="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md font-medium shrink-0">高雄市 (88)</button>
-              <button onclick="quickFilterList('南投縣')" class="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md font-medium shrink-0">南投縣 (78)</button>
-              <button onclick="quickFilterList('彰化縣')" class="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md font-medium shrink-0">彰化縣 (72)</button>
+              <span class="text-zinc-400 shrink-0">快捷篩選：</span>
+              <button onclick="quickFilterList('臺南市')" class="px-2 py-0.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-md font-medium shrink-0 transition">臺南市 (96)</button>
+              <button onclick="quickFilterList('高雄市')" class="px-2 py-0.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-md font-medium shrink-0 transition">高雄市 (88)</button>
+              <button onclick="quickFilterList('南投縣')" class="px-2 py-0.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-md font-medium shrink-0 transition">南投縣 (78)</button>
+              <button onclick="quickFilterList('彰化縣')" class="px-2 py-0.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-md font-medium shrink-0 transition">彰化縣 (72)</button>
             </div>
-            <button id="btn-list-reset" class="text-brand-600 hover:text-brand-700 font-bold shrink-0 ml-2">重設條件</button>
+            <button id="btn-list-reset" class="text-red-400 hover:text-red-300 font-bold shrink-0 ml-2">重設條件</button>
           </div>
         </div>
 
@@ -713,18 +763,18 @@
     </section>
 
     <!-- View: Dashboard View -->
-    <section id="view-dashboard" class="hidden flex-1 min-h-0 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8 bg-slate-100">
+    <section id="view-dashboard" class="hidden flex-1 min-h-0 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8 bg-zinc-950">
       <div class="max-w-4xl mx-auto space-y-6">
         <!-- 頂部標題與統計範疇切換 -->
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h2 class="font-bold text-2xl text-slate-800">朝聖進度總覽</h2>
-            <p class="text-sm text-slate-500 mt-1">追蹤全台與各縣市玄天上帝廟的踏查足跡</p>
+            <h2 class="font-bold text-2xl text-zinc-100">朝聖進度總覽</h2>
+            <p class="text-sm text-zinc-400 mt-1">追蹤全台與各縣市玄天上帝廟的踏查足跡</p>
           </div>
           <!-- 範圍切換下拉選單 -->
           <div class="flex items-center gap-2">
-            <label for="dash-scope-select" class="text-xs font-bold text-slate-600 shrink-0">統計範圍：</label>
-            <select id="dash-scope-select" class="text-xs md:text-sm p-2 md:p-2.5 px-3 rounded-xl border border-slate-300 bg-white font-bold text-slate-800 shadow-sm focus:outline-none focus:border-brand-500">
+            <label for="dash-scope-select" class="text-xs font-bold text-zinc-300 shrink-0">統計範圍：</label>
+            <select id="dash-scope-select" class="text-xs md:text-sm p-2 md:p-2.5 px-3 rounded-xl border border-zinc-700 bg-zinc-900 font-bold text-zinc-100 shadow-sm focus:outline-none focus:border-red-500">
               <option value="all">全台灣 (732 間整體統計)</option>
             </select>
           </div>
@@ -732,33 +782,33 @@
 
         <!-- 快捷縣市切換標籤列 -->
         <div class="flex items-center gap-1.5 overflow-x-auto py-1 text-xs">
-          <span class="text-slate-400 shrink-0">快捷切換：</span>
+          <span class="text-zinc-400 shrink-0">快捷切換：</span>
           <div id="dash-quick-chips" class="flex items-center gap-1.5 overflow-x-auto"></div>
         </div>
 
         <!-- 焦點統計橫幅 (支援全台或任意指定縣市動態切換) -->
-        <div class="bg-gradient-to-br from-brand-600 to-brand-500 rounded-3xl p-6 md:p-8 text-white shadow-xl relative overflow-hidden">
+        <div class="bg-gradient-to-br from-zinc-900 via-neutral-900 to-red-950 rounded-3xl p-6 md:p-8 text-zinc-100 border border-red-900/50 shadow-2xl relative overflow-hidden">
           <div class="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div class="space-y-3">
               <div class="flex items-center gap-2">
-                <span id="dash-spotlight-tag" class="text-xs tracking-wider font-bold uppercase bg-brand-gold/30 text-amber-200 border border-brand-gold/40 px-3 py-1 rounded-full">全台總進度</span>
-                <span id="dash-spotlight-subtag" class="text-xs text-brand-100 hidden sm:inline">整體宮廟 732 間</span>
+                <span id="dash-spotlight-tag" class="text-xs tracking-wider font-bold uppercase bg-red-950/90 text-red-300 border border-red-700/70 px-3 py-1 rounded-full">全台總進度</span>
+                <span id="dash-spotlight-subtag" class="text-xs text-zinc-400 hidden sm:inline">整體宮廟 732 間</span>
               </div>
               <div class="flex items-baseline gap-3">
                 <span id="dash-spotlight-visited" class="text-5xl font-black tracking-tight text-white">0</span>
-                <span id="dash-spotlight-total" class="text-xl text-slate-200">/ 732 間</span>
+                <span id="dash-spotlight-total" class="text-xl text-zinc-400">/ 732 間</span>
               </div>
-              <p class="text-sm text-slate-200">
+              <p class="text-sm text-zinc-300">
                 已踏查 <span id="dash-spotlight-scope-name" class="font-bold text-white">全台</span> 
-                <span id="dash-spotlight-percent" class="font-black text-amber-300 text-base">0.0%</span> 的玄帝宮廟
+                <span id="dash-spotlight-percent" class="font-black text-red-400 text-base">0.0%</span> 的玄帝宮廟
               </p>
               <!-- 快捷跳轉按鈕 -->
               <div class="pt-1 flex items-center gap-2">
-                <button id="dash-btn-view-list" class="px-3 py-1.5 bg-white/20 hover:bg-white/30 backdrop-blur rounded-xl text-xs font-bold text-white transition flex items-center gap-1">
+                <button id="dash-btn-view-list" class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-xl text-xs font-bold text-zinc-100 transition flex items-center gap-1">
                   <span>查看宮廟名錄</span>
                   <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
                 </button>
-                <button id="dash-btn-view-map" class="px-3 py-1.5 bg-brand-gold/30 hover:bg-brand-gold/40 text-amber-200 border border-brand-gold/40 rounded-xl text-xs font-bold transition flex items-center gap-1">
+                <button id="dash-btn-view-map" class="px-3 py-1.5 bg-red-700 hover:bg-red-600 text-white border border-red-500/50 rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm">
                   <span>電子地圖檢視</span>
                   <i data-lucide="map-pin" class="w-3.5 h-3.5"></i>
                 </button>
@@ -766,26 +816,26 @@
             </div>
 
             <!-- 右側達成率指標與三態分布卡片 -->
-            <div class="w-full md:w-72 bg-white/10 rounded-2xl p-4 backdrop-blur border border-white/20">
-              <div class="flex items-center justify-between text-xs text-slate-200">
+            <div class="w-full md:w-72 bg-zinc-950/75 rounded-2xl p-4 backdrop-blur border border-zinc-800">
+              <div class="flex items-center justify-between text-xs text-zinc-300">
                 <span id="dash-spotlight-card-title">達成率指標</span>
-                <span id="dash-spotlight-ratio" class="font-extrabold text-amber-300 text-sm">0 / 732</span>
+                <span id="dash-spotlight-ratio" class="font-extrabold text-red-400 text-sm">0 / 732</span>
               </div>
-              <div class="w-full bg-black/25 h-3 rounded-full mt-2.5 overflow-hidden p-0.5">
-                <div id="dash-spotlight-bar" class="bg-brand-gold h-full rounded-full transition-all duration-500" style="width: 0%"></div>
+              <div class="w-full bg-zinc-900 border border-zinc-800 h-3 rounded-full mt-2.5 overflow-hidden p-0.5">
+                <div id="dash-spotlight-bar" class="bg-gradient-to-r from-red-700 to-red-500 h-full rounded-full transition-all duration-500" style="width: 0%"></div>
               </div>
               <!-- 狀態細分 -->
-              <div class="grid grid-cols-3 gap-1.5 mt-4 pt-3 border-t border-white/10 text-center">
-                <div class="bg-white/10 rounded-lg p-1.5">
-                  <div class="text-[10px] text-emerald-300 font-bold">🟢 已參拜</div>
+              <div class="grid grid-cols-3 gap-1.5 mt-4 pt-3 border-t border-zinc-800 text-center">
+                <div class="bg-zinc-900/90 border border-zinc-800 rounded-lg p-1.5">
+                  <div class="text-[10px] text-emerald-400 font-bold">🟢 已參拜</div>
                   <div id="dash-stat-visited" class="text-sm font-black text-white mt-0.5">0</div>
                 </div>
-                <div class="bg-white/10 rounded-lg p-1.5">
-                  <div class="text-[10px] text-amber-300 font-bold">🟡 規劃中</div>
+                <div class="bg-zinc-900/90 border border-zinc-800 rounded-lg p-1.5">
+                  <div class="text-[10px] text-red-400 font-bold">🔴 規劃中</div>
                   <div id="dash-stat-planned" class="text-sm font-black text-white mt-0.5">0</div>
                 </div>
-                <div class="bg-white/10 rounded-lg p-1.5">
-                  <div class="text-[10px] text-slate-300 font-bold">⚪ 未參拜</div>
+                <div class="bg-zinc-900/90 border border-zinc-800 rounded-lg p-1.5">
+                  <div class="text-[10px] text-zinc-400 font-bold">⚫ 未參拜</div>
                   <div id="dash-stat-unvisited" class="text-sm font-black text-white mt-0.5">732</div>
                 </div>
               </div>
@@ -801,28 +851,28 @@
         </div>
 
         <!-- 轄內各鄉鎮市區完成度分佈 (當選取特定縣市時呈現) -->
-        <div id="dash-district-section" class="hidden bg-white rounded-3xl p-6 shadow-sm border border-slate-200 space-y-4">
+        <div id="dash-district-section" class="hidden bg-zinc-900 rounded-3xl p-6 shadow-lg border border-zinc-800 space-y-4">
           <div class="flex items-center justify-between">
-            <h3 class="font-bold text-base md:text-lg text-slate-800 flex items-center gap-2">
-              <i data-lucide="map" class="w-5 h-5 text-brand-600"></i>
+            <h3 class="font-bold text-base md:text-lg text-zinc-100 flex items-center gap-2">
+              <i data-lucide="map" class="w-5 h-5 text-red-400"></i>
               <span id="dash-district-title">鄉鎮市區轄內進度</span>
             </h3>
-            <span id="dash-district-count-badge" class="text-xs font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">共 0 區</span>
+            <span id="dash-district-count-badge" class="text-xs font-bold text-zinc-300 bg-zinc-800 border border-zinc-700 px-2.5 py-1 rounded-full">共 0 區</span>
           </div>
           <div id="dash-district-list" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3"></div>
         </div>
 
         <!-- 各縣市參拜完成度一覽 (22 縣市比較與排序) -->
-        <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 space-y-4">
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
-            <h3 class="font-bold text-base md:text-lg text-slate-800 flex items-center gap-2">
-              <i data-lucide="bar-chart-2" class="w-5 h-5 text-brand-600"></i>
+        <div class="bg-zinc-900 rounded-3xl p-6 shadow-lg border border-zinc-800 space-y-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800 pb-3">
+            <h3 class="font-bold text-base md:text-lg text-zinc-100 flex items-center gap-2">
+              <i data-lucide="bar-chart-2" class="w-5 h-5 text-red-400"></i>
               各縣市參拜完成度一覽
-              <span class="text-xs font-normal text-slate-400">(共 22 縣市)</span>
+              <span class="text-xs font-normal text-zinc-400">(共 22 縣市)</span>
             </h3>
             <div class="flex items-center gap-2">
-              <label for="dash-sort-select" class="text-xs text-slate-500 shrink-0">排序：</label>
-              <select id="dash-sort-select" class="text-xs p-1.5 px-2.5 rounded-lg border border-slate-200 bg-slate-50 font-medium text-slate-700 focus:outline-none focus:border-brand-500">
+              <label for="dash-sort-select" class="text-xs text-zinc-400 shrink-0">排序：</label>
+              <select id="dash-sort-select" class="text-xs p-1.5 px-2.5 rounded-lg border border-zinc-700 bg-zinc-950 font-medium text-zinc-200 focus:outline-none focus:border-red-500">
                 <option value="total-desc">依宮廟總數 (多到少)</option>
                 <option value="percent-desc">依達成率 (高到低)</option>
                 <option value="visited-desc">依已參拜數 (多到少)</option>
@@ -836,11 +886,11 @@
     </section>
 
     <!-- View: Timeline View -->
-    <section id="view-timeline" class="hidden flex-1 min-h-0 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8 bg-slate-100">
+    <section id="view-timeline" class="hidden flex-1 min-h-0 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8 bg-zinc-950">
       <div class="max-w-3xl mx-auto space-y-6">
         <div>
-          <h2 class="font-bold text-2xl text-slate-800">參拜足跡日誌</h2>
-          <p class="text-sm text-slate-500 mt-1">按時間倒序檢視每一趟參拜的現場照片與虔心心得</p>
+          <h2 class="font-bold text-2xl text-zinc-100">參拜足跡日誌</h2>
+          <p class="text-sm text-zinc-400 mt-1">按時間倒序檢視每一趟參拜的現場照片與虔心心得</p>
         </div>
 
         <div id="timeline-container" class="space-y-6"></div>
@@ -848,20 +898,20 @@
     </section>
 
     <!-- View: Settings View -->
-    <section id="view-settings" class="hidden flex-1 min-h-0 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8 bg-slate-100">
+    <section id="view-settings" class="hidden flex-1 min-h-0 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8 bg-zinc-950">
       <!-- 1. 未登入鎖定畫面 -->
-      <div id="settings-locked-box" class="max-w-md mx-auto my-12 bg-white rounded-3xl p-8 border border-slate-200 shadow-sm text-center space-y-5">
-        <div class="w-16 h-16 bg-brand-50 text-brand-600 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
+      <div id="settings-locked-box" class="max-w-md mx-auto my-12 bg-zinc-900 rounded-3xl p-8 border border-zinc-800 shadow-xl text-center space-y-5">
+        <div class="w-16 h-16 bg-red-950/80 text-red-400 border border-red-900/60 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
           <i data-lucide="lock" class="w-8 h-8"></i>
         </div>
         <div>
-          <h3 class="text-xl font-extrabold text-slate-800">管理與同步權限控管</h3>
-          <p class="text-xs text-slate-500 mt-2 leading-relaxed">
+          <h3 class="text-xl font-extrabold text-zinc-100">管理與同步權限控管</h3>
+          <p class="text-xs text-zinc-400 mt-2 leading-relaxed">
             系統設定、雲端即時同步、本地資料備份與還原等功能已啟用安全管制。請先使用 Google 帳號登入驗證管理員身分。
           </p>
         </div>
-        <button onclick="loginWithGoogle()" class="w-full py-3 px-4 bg-brand-600 hover:bg-brand-500 text-white font-bold rounded-xl text-sm shadow transition flex items-center justify-center gap-2">
-          <svg class="w-4 h-4" viewBox="0 0 24 24">
+        <button onclick="loginWithGoogle()" class="w-full py-3 px-4 bg-red-700 hover:bg-red-600 text-white font-bold rounded-xl text-sm shadow transition flex items-center justify-center gap-2">
+          <svg class="w-4 h-4 bg-white rounded-full p-0.5" viewBox="0 0 24 24">
             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
             <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
             <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
@@ -873,71 +923,71 @@
 
       <!-- 2. 已登入管理面板 -->
       <div id="settings-content-box" class="hidden max-w-2xl mx-auto space-y-6">
-        <div class="flex items-center justify-between">
+        <div class="flex items-center justify-between gap-2 flex-wrap">
           <div>
-            <h2 class="font-bold text-2xl text-slate-800">雲端與資料管理</h2>
-            <p class="text-sm text-slate-500 mt-1">整合 Firebase 雲端即時同步、相片圖床與離線本機備份</p>
+            <h2 class="font-bold text-2xl text-zinc-100">雲端與資料管理</h2>
+            <p class="text-sm text-zinc-400 mt-1">整合 Firebase 雲端即時同步、相片圖床與離線本機備份</p>
           </div>
-          <div class="flex items-center gap-2 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl text-xs text-emerald-800 font-semibold">
-            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+          <div class="flex items-center gap-2 bg-emerald-950/60 border border-emerald-800/70 px-3 py-1.5 rounded-xl text-xs text-emerald-300 font-semibold">
+            <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
             <span id="settings-user-email">管理員已連線</span>
           </div>
         </div>
 
         <!-- Firebase Cloud Status Box -->
-        <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 space-y-3">
+        <div class="bg-zinc-900 rounded-3xl p-6 shadow-lg border border-zinc-800 space-y-3">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
-              <i data-lucide="cloud" class="w-5 h-5 text-brand-600"></i>
-              <h4 class="font-bold text-slate-800">Firebase 雲端連線狀態</h4>
+              <i data-lucide="cloud" class="w-5 h-5 text-red-400"></i>
+              <h4 class="font-bold text-zinc-100">Firebase 雲端連線狀態</h4>
             </div>
-            <span id="settings-firebase-badge" class="text-xs px-2.5 py-1 rounded-full font-bold bg-amber-100 text-amber-700">檢查中...</span>
+            <span id="settings-firebase-badge" class="text-xs px-2.5 py-1 rounded-full font-bold bg-zinc-800 text-zinc-300">檢查中...</span>
           </div>
-          <p id="settings-firebase-desc" class="text-xs text-slate-500 leading-relaxed"></p>
-          <div id="firebase-guide-box" class="hidden text-xs bg-slate-50 p-3 rounded-xl border border-slate-200 text-slate-600 space-y-1">
+          <p id="settings-firebase-desc" class="text-xs text-zinc-400 leading-relaxed"></p>
+          <div id="firebase-guide-box" class="hidden text-xs bg-zinc-950 p-3 rounded-xl border border-zinc-800 text-zinc-300 space-y-1">
             <p><strong>💡 如何啟用 Firebase 雲端同步：</strong></p>
-            <p>1. 開啟 <code>private/config/firebase-config.js</code>，填入您在 Firebase Console 取得之專案設定並上傳至網站根目錄。</p>
+            <p>1. 開啟 <code class="text-red-300">private/config/firebase-config.js</code>，填入您在 Firebase Console 取得之專案設定並上傳至網站根目錄。</p>
             <p>2. 於 Firebase Console 啟用 <strong>Authentication (Google 登入)</strong>、<strong>Firestore</strong> 與 <strong>Storage</strong>。</p>
           </div>
         </div>
 
         <!-- Manual Cloud Reconcile Card -->
-        <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 space-y-4">
+        <div class="bg-zinc-900 rounded-3xl p-6 shadow-lg border border-zinc-800 space-y-4">
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <h4 class="font-bold text-slate-800 flex items-center gap-1.5 text-base">
-                <i data-lucide="refresh-cw" class="w-5 h-5 text-brand-600"></i>
+              <h4 class="font-bold text-zinc-100 flex items-center gap-1.5 text-base">
+                <i data-lucide="refresh-cw" class="w-5 h-5 text-red-400"></i>
                 <span>立即雙向強制同步</span>
-                <span class="text-[10px] bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full">跨裝置對齊</span>
+                <span class="text-[10px] bg-red-950 text-red-300 border border-red-800/70 font-bold px-2 py-0.5 rounded-full">跨裝置對齊</span>
               </h4>
-              <p class="text-xs text-slate-500 mt-1">
+              <p class="text-xs text-zinc-400 mt-1">
                 將本機所有已打卡足跡、心得筆記與自訂規劃行程一次性推播至雲端庫，解決手機與桌機紀錄不同步的問題。
               </p>
             </div>
-            <button id="btn-force-sync" onclick="forceSyncNow()" class="self-start sm:self-auto px-4 py-2.5 bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold rounded-xl shadow transition flex items-center gap-1.5 shrink-0">
+            <button id="btn-force-sync" onclick="forceSyncNow()" class="self-start sm:self-auto px-4 py-2.5 bg-red-700 hover:bg-red-600 text-white text-xs font-bold rounded-xl shadow transition flex items-center gap-1.5 shrink-0">
               <i data-lucide="refresh-cw" class="w-4 h-4"></i> 立即強制同步
             </button>
           </div>
         </div>
 
         <!-- Backup & Restore Box -->
-        <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 space-y-5">
-          <div class="flex items-center justify-between border-b border-slate-100 pb-4">
+        <div class="bg-zinc-900 rounded-3xl p-6 shadow-lg border border-zinc-800 space-y-5">
+          <div class="flex items-center justify-between border-b border-zinc-800 pb-4">
             <div>
-              <h4 class="font-bold text-slate-800">匯出本機備份 (JSON)</h4>
-              <p class="text-xs text-slate-500 mt-0.5">下載包含所有打卡紀錄與相片的完整離線備份</p>
+              <h4 class="font-bold text-zinc-100">匯出本機備份 (JSON)</h4>
+              <p class="text-xs text-zinc-400 mt-0.5">下載包含所有打卡紀錄與相片的完整離線備份</p>
             </div>
-            <button id="btn-export-backup" class="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold rounded-xl shadow transition flex items-center gap-1.5">
+            <button id="btn-export-backup" class="px-4 py-2 bg-red-700 hover:bg-red-600 text-white text-xs font-bold rounded-xl shadow transition flex items-center gap-1.5">
               <i data-lucide="download" class="w-4 h-4"></i> 匯出備份
             </button>
           </div>
 
-          <div class="flex items-center justify-between border-b border-slate-100 pb-4">
+          <div class="flex items-center justify-between border-b border-zinc-800 pb-4">
             <div>
-              <h4 class="font-bold text-slate-800">匯入還原備份</h4>
-              <p class="text-xs text-slate-500 mt-0.5">從 JSON 備份檔回復歷史打卡與照片記錄</p>
+              <h4 class="font-bold text-zinc-100">匯入還原備份</h4>
+              <p class="text-xs text-zinc-400 mt-0.5">從 JSON 備份檔回復歷史打卡與照片記錄</p>
             </div>
-            <label class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl cursor-pointer transition flex items-center gap-1.5">
+            <label class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 text-xs font-bold rounded-xl cursor-pointer transition flex items-center gap-1.5">
               <i data-lucide="upload" class="w-4 h-4"></i> 選擇檔案
               <input type="file" id="input-import-backup" accept=".json" class="hidden" />
             </label>
@@ -945,10 +995,10 @@
 
           <div class="flex items-center justify-between pt-1">
             <div>
-              <h4 class="font-bold text-rose-600">重設所有打卡紀錄</h4>
-              <p class="text-xs text-slate-500 mt-0.5">清除本機儲存的所有紀錄（不影響雲端已同步資料）</p>
+              <h4 class="font-bold text-red-400">重設所有打卡紀錄</h4>
+              <p class="text-xs text-zinc-400 mt-0.5">清除本機儲存的所有紀錄（不影響雲端已同步資料）</p>
             </div>
-            <button id="btn-reset-db" class="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-xs font-bold rounded-xl transition">
+            <button id="btn-reset-db" class="px-4 py-2 bg-red-950/60 hover:bg-red-900/70 text-red-300 border border-red-800/70 text-xs font-bold rounded-xl transition">
               清空紀錄
             </button>
           </div>
@@ -958,46 +1008,46 @@
   </div>
 
   <!-- Bottom Navigation Tab Bar -->
-  <nav id="bottom-nav-bar" class="bg-white/95 backdrop-blur-md border-t border-slate-200 z-40 shrink-0 min-h-[4rem] px-1 py-1 flex items-center justify-around gap-0.5 sm:gap-1 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] select-none" style="padding-bottom: max(6px, env(safe-area-inset-bottom, 0px));">
-    <button class="nav-tab active flex flex-col items-center justify-center flex-1 py-1 px-0.5 rounded-xl md:rounded-2xl transition-all duration-200 bg-amber-100/70 text-brand-600 font-bold" onclick="switchView('map')">
+  <nav id="bottom-nav-bar" class="bg-zinc-950/95 backdrop-blur-md border-t border-zinc-800 z-40 shrink-0 min-h-[4rem] px-1 py-1 flex items-center justify-around gap-0.5 sm:gap-1 shadow-[0_-4px_20px_rgba(0,0,0,0.5)] select-none" style="padding-bottom: max(6px, env(safe-area-inset-bottom, 0px));">
+    <button class="nav-tab active flex flex-col items-center justify-center flex-1 py-1 px-0.5 rounded-xl md:rounded-2xl transition-all duration-200 bg-red-950/75 text-red-400 border border-red-900/60 font-bold" onclick="switchView('map')">
       <i data-lucide="map-pin" class="w-4 h-4 mb-0.5 shrink-0"></i>
       <span class="text-[10px] md:text-[11px] leading-tight truncate">朝聖地圖</span>
     </button>
-    <button class="nav-tab flex flex-col items-center justify-center flex-1 py-1 px-0.5 rounded-xl md:rounded-2xl transition-all duration-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 font-medium" onclick="switchView('list')">
+    <button class="nav-tab flex flex-col items-center justify-center flex-1 py-1 px-0.5 rounded-xl md:rounded-2xl transition-all duration-200 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900 border border-transparent font-medium" onclick="switchView('list')">
       <i data-lucide="list" class="w-4 h-4 mb-0.5 shrink-0"></i>
       <span class="text-[10px] md:text-[11px] leading-tight truncate">廟宇名錄</span>
     </button>
-    <button class="nav-tab flex flex-col items-center justify-center flex-1 py-1 px-0.5 rounded-xl md:rounded-2xl transition-all duration-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 font-medium" onclick="switchView('planner')">
-      <i data-lucide="route" class="w-4 h-4 mb-0.5 shrink-0 text-amber-600"></i>
+    <button class="nav-tab flex flex-col items-center justify-center flex-1 py-1 px-0.5 rounded-xl md:rounded-2xl transition-all duration-200 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900 border border-transparent font-medium" onclick="switchView('planner')">
+      <i data-lucide="route" class="w-4 h-4 mb-0.5 shrink-0 text-red-400"></i>
       <span class="text-[10px] md:text-[11px] leading-tight truncate">路線規劃</span>
     </button>
-    <button class="nav-tab flex flex-col items-center justify-center flex-1 py-1 px-0.5 rounded-xl md:rounded-2xl transition-all duration-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 font-medium" onclick="switchView('dashboard')">
+    <button class="nav-tab flex flex-col items-center justify-center flex-1 py-1 px-0.5 rounded-xl md:rounded-2xl transition-all duration-200 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900 border border-transparent font-medium" onclick="switchView('dashboard')">
       <i data-lucide="trophy" class="w-4 h-4 mb-0.5 shrink-0"></i>
       <span class="text-[10px] md:text-[11px] leading-tight truncate">進度統計</span>
     </button>
-    <button class="nav-tab flex flex-col items-center justify-center flex-1 py-1 px-0.5 rounded-xl md:rounded-2xl transition-all duration-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 font-medium" onclick="switchView('timeline')">
+    <button class="nav-tab flex flex-col items-center justify-center flex-1 py-1 px-0.5 rounded-xl md:rounded-2xl transition-all duration-200 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900 border border-transparent font-medium" onclick="switchView('timeline')">
       <i data-lucide="image" class="w-4 h-4 mb-0.5 shrink-0"></i>
       <span class="text-[10px] md:text-[11px] leading-tight truncate">足跡日誌</span>
     </button>
-    <button class="nav-tab flex flex-col items-center justify-center flex-1 py-1 px-0.5 rounded-xl md:rounded-2xl transition-all duration-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 font-medium" onclick="switchView('settings')">
+    <button class="nav-tab flex flex-col items-center justify-center flex-1 py-1 px-0.5 rounded-xl md:rounded-2xl transition-all duration-200 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900 border border-transparent font-medium" onclick="switchView('settings')">
       <i data-lucide="settings" class="w-4 h-4 mb-0.5 shrink-0"></i>
       <span class="text-[10px] md:text-[11px] leading-tight truncate">設定備份</span>
     </button>
   </nav>
 
   <!-- Modal: Temple Detail & Check-in / Notes -->
-  <div id="temple-modal" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden flex items-end md:items-center justify-center p-0 md:p-4 transition-all">
-    <div class="bg-white w-full max-w-xl max-h-[90vh] rounded-t-3xl md:rounded-3xl shadow-2xl overflow-hidden flex flex-col">
-      <div class="p-5 border-b border-slate-100 flex items-start justify-between bg-slate-50/80">
+  <div id="temple-modal" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm hidden flex items-end md:items-center justify-center p-0 md:p-4 transition-all">
+    <div class="bg-zinc-900 text-zinc-100 border border-zinc-800 w-full max-w-xl max-h-[90vh] rounded-t-3xl md:rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+      <div class="p-5 border-b border-zinc-800 flex items-start justify-between bg-zinc-950/90">
         <div>
           <div class="flex items-center gap-2">
-            <span id="modal-county-district" class="text-xs bg-brand-100 text-brand-600 font-semibold px-2 py-0.5 rounded-md"></span>
+            <span id="modal-county-district" class="text-xs bg-red-950/90 text-red-300 border border-red-800/70 font-semibold px-2 py-0.5 rounded-md"></span>
             <span id="modal-status-badge" class="text-xs font-semibold px-2 py-0.5 rounded-md"></span>
           </div>
-          <h3 id="modal-title" class="font-extrabold text-2xl text-slate-800 mt-1"></h3>
-          <p id="modal-address" class="text-xs text-slate-500 mt-0.5 flex items-center gap-1"></p>
+          <h3 id="modal-title" class="font-extrabold text-2xl text-zinc-50 mt-1"></h3>
+          <p id="modal-address" class="text-xs text-zinc-400 mt-0.5 flex items-center gap-1"></p>
         </div>
-        <button id="modal-close" class="p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-200 transition">
+        <button id="modal-close" class="p-2 text-zinc-400 hover:text-zinc-100 rounded-full hover:bg-zinc-800 transition">
           <i data-lucide="x" class="w-6 h-6"></i>
         </button>
       </div>
@@ -1005,112 +1055,112 @@
       <div class="flex-1 overflow-y-auto p-5 space-y-5">
         <!-- 導航與狀態切換列 -->
         <div id="modal-action-bar" class="grid grid-cols-2 gap-3">
-          <a id="btn-navigate" href="#" target="_blank" class="flex items-center justify-center gap-2 py-2.5 px-4 bg-sky-500 hover:bg-sky-600 text-white rounded-xl font-bold text-sm shadow transition">
-            <i data-lucide="navigation" class="w-4 h-4"></i>
+          <a id="btn-navigate" href="#" target="_blank" class="flex items-center justify-center gap-2 py-2.5 px-4 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-100 rounded-xl font-bold text-sm shadow transition">
+            <i data-lucide="navigation" class="w-4 h-4 text-red-400"></i>
             導航前往
           </a>
-          <button id="btn-toggle-status" class="flex items-center justify-center gap-2 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm shadow transition">
+          <button id="btn-toggle-status" class="flex items-center justify-center gap-2 py-2.5 px-4 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl font-bold text-sm shadow transition">
             <i data-lucide="check" class="w-4 h-4"></i>
             標記為已參拜
           </button>
         </div>
 
         <!-- 訪客唯讀狀態提示條 (未登入時呈現) -->
-        <div id="modal-visitor-banner" class="hidden bg-amber-50 border border-amber-200 rounded-2xl p-3.5 flex items-center justify-between text-xs text-amber-800">
+        <div id="modal-visitor-banner" class="hidden bg-red-950/40 border border-red-900/60 rounded-2xl p-3.5 flex items-center justify-between gap-2 text-xs text-red-200">
           <div class="flex items-center gap-2">
-            <i data-lucide="shield" class="w-4 h-4 text-amber-600 shrink-0"></i>
+            <i data-lucide="shield" class="w-4 h-4 text-red-400 shrink-0"></i>
             <span>目前為<strong>訪客唯讀模式</strong>。登入 Google 帳號後即可打卡與編輯。</span>
           </div>
-          <button onclick="loginWithGoogle()" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl shadow transition shrink-0">
+          <button onclick="loginWithGoogle()" class="px-3 py-1.5 bg-red-700 hover:bg-red-600 text-white font-bold rounded-xl shadow transition shrink-0">
             Google 登入
           </button>
         </div>
 
         <!-- 唯讀心得與相片展示區塊 (未登入但已打卡時呈現) -->
-        <div id="modal-readonly-record" class="hidden bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
-          <div class="flex items-center justify-between border-b border-slate-200 pb-2">
-            <h4 class="font-bold text-xs text-slate-600 flex items-center gap-1.5">
-              <i data-lucide="book-open" class="w-4 h-4 text-brand-600"></i>
+        <div id="modal-readonly-record" class="hidden bg-zinc-950/80 p-4 rounded-2xl border border-zinc-800 space-y-3">
+          <div class="flex items-center justify-between border-b border-zinc-800 pb-2">
+            <h4 class="font-bold text-xs text-zinc-300 flex items-center gap-1.5">
+              <i data-lucide="book-open" class="w-4 h-4 text-red-400"></i>
               參拜足跡記錄
             </h4>
             <div id="modal-readonly-meta" class="flex items-center gap-2"></div>
           </div>
-          <div id="modal-readonly-notes" class="text-xs text-slate-700 whitespace-pre-wrap leading-relaxed py-1"></div>
+          <div id="modal-readonly-notes" class="text-xs text-zinc-200 whitespace-pre-wrap leading-relaxed py-1"></div>
           <div id="modal-readonly-photos" class="grid grid-cols-3 gap-2 pt-1"></div>
         </div>
 
         <!-- 管理者編輯區塊 (已登入時呈現) -->
-        <div id="modal-edit-box" class="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-4">
-          <h4 class="font-bold text-sm text-slate-700 flex items-center gap-1.5">
-            <i data-lucide="edit-3" class="w-4 h-4 text-brand-600"></i>
+        <div id="modal-edit-box" class="bg-zinc-950/80 p-4 rounded-2xl border border-zinc-800 space-y-4">
+          <h4 class="font-bold text-sm text-zinc-200 flex items-center gap-1.5">
+            <i data-lucide="edit-3" class="w-4 h-4 text-red-400"></i>
             參拜筆記與心得
           </h4>
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <label class="block text-xs font-semibold text-slate-600 mb-1">參拜日期</label>
-              <input type="date" id="input-visit-date" class="w-full text-xs p-2.5 rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-brand-500" />
+              <label class="block text-xs font-semibold text-zinc-300 mb-1">參拜日期</label>
+              <input type="date" id="input-visit-date" class="w-full text-xs p-2.5 rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-100 focus:outline-none focus:border-red-500" />
             </div>
             <div>
-              <label class="block text-xs font-semibold text-slate-600 mb-1">天氣 / 心情標籤</label>
-              <input type="text" id="input-tag" placeholder="如：晴天、香火鼎盛、求得籤詩" class="w-full text-xs p-2.5 rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-brand-500" />
+              <label class="block text-xs font-semibold text-zinc-300 mb-1">天氣 / 心情標籤</label>
+              <input type="text" id="input-tag" placeholder="如：晴天、香火鼎盛、求得籤詩" class="w-full text-xs p-2.5 rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-red-500" />
             </div>
           </div>
 
           <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">參拜心得、祈願或特色記錄</label>
-            <textarea id="input-notes" rows="3" placeholder="記錄今日參拜感動、主神神韻、廟方淵源或祈願事項..." class="w-full text-xs p-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-brand-500 resize-none"></textarea>
+            <label class="block text-xs font-semibold text-zinc-300 mb-1">參拜心得、祈願或特色記錄</label>
+            <textarea id="input-notes" rows="3" placeholder="記錄今日參拜感動、主神神韻、廟方淵源或祈願事項..." class="w-full text-xs p-3 rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-red-500 resize-y"></textarea>
           </div>
 
           <div>
             <div class="flex items-center justify-between mb-2">
-              <label class="text-xs font-semibold text-slate-600 flex items-center gap-1">
-                <i data-lucide="camera" class="w-4 h-4 text-slate-500"></i>
+              <label class="text-xs font-semibold text-zinc-300 flex items-center gap-1">
+                <i data-lucide="camera" class="w-4 h-4 text-zinc-400"></i>
                 現場照片 (自動智慧壓縮)
               </label>
-              <label class="cursor-pointer text-xs bg-brand-600 hover:bg-brand-500 text-white px-3 py-1 rounded-lg font-bold flex items-center gap-1 shadow-sm transition">
+              <label class="cursor-pointer text-xs bg-red-700 hover:bg-red-600 text-white px-3 py-1 rounded-lg font-bold flex items-center gap-1 shadow-sm transition">
                 <i data-lucide="plus" class="w-3.5 h-3.5"></i> 新增相片
                 <input type="file" id="input-photo" accept="image/*" multiple class="hidden" />
               </label>
             </div>
 
-            <div id="photos-container" class="grid grid-cols-3 gap-2 min-h-[72px] p-2 bg-white rounded-xl border border-dashed border-slate-200">
-              <p id="no-photos-hint" class="col-span-3 text-center text-xs text-slate-400 py-4">尚未上傳照片</p>
+            <div id="photos-container" class="grid grid-cols-3 gap-2 min-h-[72px] p-2 bg-zinc-900 rounded-xl border border-dashed border-zinc-700">
+              <p id="no-photos-hint" class="col-span-3 text-center text-xs text-zinc-400 py-4">尚未上傳照片</p>
             </div>
           </div>
         </div>
 
         <!-- 廟宇基本中繼資料 -->
-        <div class="text-xs text-slate-600 space-y-1.5 pt-2 border-t border-slate-100">
+        <div class="text-xs text-zinc-300 space-y-1.5 pt-2 border-t border-zinc-800">
           <div class="flex justify-between">
-            <span class="text-slate-400">主祀神尊稱：</span>
-            <span id="meta-main-deity" class="font-medium"></span>
+            <span class="text-zinc-400">主祀神尊稱：</span>
+            <span id="meta-main-deity" class="font-medium text-zinc-100"></span>
           </div>
           <div class="flex justify-between">
-            <span class="text-slate-400">建立年份：</span>
-            <span id="meta-year" class="font-medium"></span>
+            <span class="text-zinc-400">建立年份：</span>
+            <span id="meta-year" class="font-medium text-zinc-100"></span>
           </div>
           <div class="flex justify-between">
-            <span class="text-slate-400">官方資料來源：</span>
-            <a id="meta-source" href="#" target="_blank" class="text-sky-600 hover:underline">CRGIS 文化資源地理系統</a>
+            <span class="text-zinc-400">官方資料來源：</span>
+            <a id="meta-source" href="#" target="_blank" class="text-red-400 hover:underline">CRGIS 文化資源地理系統</a>
           </div>
         </div>
       </div>
 
       <!-- 底部列：管理者編輯模式 -->
-      <div id="modal-footer-edit" class="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-        <button id="btn-delete-record" class="text-xs text-rose-500 hover:text-rose-700 font-semibold px-2 py-1">
+      <div id="modal-footer-edit" class="p-4 bg-zinc-950/90 border-t border-zinc-800 flex items-center justify-between">
+        <button id="btn-delete-record" class="text-xs text-red-400 hover:text-red-300 font-semibold px-2 py-1">
           清除本廟紀錄
         </button>
-        <button id="btn-save-record" class="px-6 py-2.5 bg-brand-600 hover:bg-brand-500 text-white font-bold rounded-xl text-sm shadow transition">
+        <button id="btn-save-record" class="px-6 py-2.5 bg-red-700 hover:bg-red-600 text-white font-bold rounded-xl text-sm shadow transition">
           儲存紀錄
         </button>
       </div>
 
       <!-- 底部列：訪客唯讀模式 -->
-      <div id="modal-footer-readonly" class="hidden p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-        <span class="text-xs text-slate-400">訪客模式（唯讀瀏覽）</span>
-        <button onclick="document.getElementById('temple-modal').classList.add('hidden')" class="px-5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl text-xs transition">
+      <div id="modal-footer-readonly" class="hidden p-4 bg-zinc-950/90 border-t border-zinc-800 flex items-center justify-between">
+        <span class="text-xs text-zinc-400">訪客模式（唯讀瀏覽）</span>
+        <button onclick="document.getElementById('temple-modal').classList.add('hidden')" class="px-5 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 font-bold rounded-xl text-xs transition">
           關閉視窗
         </button>
       </div>
@@ -1118,22 +1168,22 @@
   </div>
 
   <!-- Modal: 已存行程列表 -->
-  <div id="saved-itineraries-modal" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden flex items-center justify-center p-4 transition-all">
-    <div class="bg-white w-full max-w-lg max-h-[85vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col">
-      <div class="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-        <h3 class="font-bold text-base text-slate-800 flex items-center gap-2">
-          <i data-lucide="folder-clock" class="w-5 h-5 text-amber-500"></i>
+  <div id="saved-itineraries-modal" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm hidden flex items-center justify-center p-4 transition-all">
+    <div class="bg-zinc-900 text-zinc-100 border border-zinc-800 w-full max-w-lg max-h-[85vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+      <div class="p-5 border-b border-zinc-800 flex items-center justify-between bg-zinc-950/90">
+        <h3 class="font-bold text-base text-zinc-100 flex items-center gap-2">
+          <i data-lucide="folder-clock" class="w-5 h-5 text-red-400"></i>
           已儲存的朝聖行程
         </h3>
-        <button onclick="closeSavedItinerariesModal()" class="p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-200 transition">
+        <button onclick="closeSavedItinerariesModal()" class="p-2 text-zinc-400 hover:text-zinc-100 rounded-full hover:bg-zinc-800 transition">
           <i data-lucide="x" class="w-5 h-5"></i>
         </button>
       </div>
       <div id="saved-itineraries-list" class="flex-1 overflow-y-auto p-4 space-y-3">
         <!-- 行程卡片動態渲染 -->
       </div>
-      <div class="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
-        <button onclick="closeSavedItinerariesModal()" class="px-5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl text-xs transition">
+      <div class="p-4 bg-zinc-950/90 border-t border-zinc-800 flex justify-end">
+        <button onclick="closeSavedItinerariesModal()" class="px-5 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 font-bold rounded-xl text-xs transition">
           關閉
         </button>
       </div>
@@ -1141,25 +1191,25 @@
   </div>
 
   <!-- Modal: 搜尋並加入廟宇至路線 -->
-  <div id="add-temple-to-route-modal" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden flex items-center justify-center p-4 transition-all">
-    <div class="bg-white w-full max-w-md max-h-[80vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col">
-      <div class="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-        <h3 class="font-bold text-base text-slate-800 flex items-center gap-2">
-          <i data-lucide="plus-circle" class="w-5 h-5 text-brand-600"></i>
+  <div id="add-temple-to-route-modal" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm hidden flex items-center justify-center p-4 transition-all">
+    <div class="bg-zinc-900 text-zinc-100 border border-zinc-800 w-full max-w-md max-h-[80vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+      <div class="p-5 border-b border-zinc-800 flex items-center justify-between bg-zinc-950/90">
+        <h3 class="font-bold text-base text-zinc-100 flex items-center gap-2">
+          <i data-lucide="plus-circle" class="w-5 h-5 text-red-400"></i>
           加入其他廟宇至行程
         </h3>
-        <button onclick="closeAddTempleToRouteModal()" class="p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-200 transition">
+        <button onclick="closeAddTempleToRouteModal()" class="p-2 text-zinc-400 hover:text-zinc-100 rounded-full hover:bg-zinc-800 transition">
           <i data-lucide="x" class="w-5 h-5"></i>
         </button>
       </div>
-      <div class="p-4 border-b border-slate-100 space-y-2">
-        <input type="text" id="add-temple-search-input" oninput="filterAddTempleList(this.value)" placeholder="輸入廟名、鄉鎮或地址關鍵字搜尋..." class="w-full text-xs p-3 rounded-xl border border-slate-200 focus:outline-none focus:border-brand-500 bg-slate-50 focus:bg-white" />
+      <div class="p-4 border-b border-zinc-800 space-y-2">
+        <input type="text" id="add-temple-search-input" oninput="filterAddTempleList(this.value)" placeholder="輸入廟名、鄉鎮或地址關鍵字搜尋..." class="w-full text-xs p-3 rounded-xl border border-zinc-700 focus:outline-none focus:border-red-500 bg-zinc-950 text-zinc-100 placeholder:text-zinc-500" />
       </div>
       <div id="add-temple-results-list" class="flex-1 overflow-y-auto p-4 space-y-2 max-h-80">
         <!-- 搜尋候選廟宇動態渲染 -->
       </div>
-      <div class="p-3 bg-slate-50 border-t border-slate-100 flex justify-end">
-        <button onclick="closeAddTempleToRouteModal()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl text-xs transition">
+      <div class="p-3 bg-zinc-950/90 border-t border-zinc-800 flex justify-end">
+        <button onclick="closeAddTempleToRouteModal()" class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 font-bold rounded-xl text-xs transition">
           取消
         </button>
       </div>
@@ -1168,43 +1218,43 @@
 
   <!-- Native Dialog: 全螢幕高畫質照片燈箱 (Lightbox) -->
   <dialog id="photo-lightbox-dialog" closedby="any" aria-labelledby="lightbox-caption" class="m-auto p-0 bg-transparent border-0 max-w-[94vw] max-h-[92dvh] w-fit overflow-visible focus:outline-none">
-    <div class="bg-slate-950/95 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-w-[94vw] max-h-[92dvh] text-white">
-      <div class="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-slate-800/80 bg-slate-900/90 shrink-0">
+    <div class="bg-zinc-950/95 border border-red-900/60 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-w-[94vw] max-h-[92dvh] text-zinc-100">
+      <div class="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-zinc-800 bg-zinc-900/95 shrink-0">
         <div class="min-w-0">
-          <h3 id="lightbox-caption" class="text-sm font-bold text-slate-100 truncate">參拜照片</h3>
-          <p id="lightbox-meta" class="text-[11px] text-slate-400">1 / 1</p>
+          <h3 id="lightbox-caption" class="text-sm font-bold text-zinc-100 truncate">參拜照片</h3>
+          <p id="lightbox-meta" class="text-[11px] text-zinc-400">1 / 1</p>
         </div>
         <div class="flex items-center gap-1.5 shrink-0">
-          <button type="button" id="lightbox-btn-zoom" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1 transition" title="切換完整比例 / 原始像素大小檢視">
-            <i data-lucide="zoom-in" class="w-3.5 h-3.5"></i>
+          <button type="button" id="lightbox-btn-zoom" class="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 text-xs font-semibold flex items-center gap-1 transition" title="切換完整比例 / 原始像素大小檢視">
+            <i data-lucide="zoom-in" class="w-3.5 h-3.5 text-red-400"></i>
             <span id="lightbox-zoom-label">放大檢視</span>
           </button>
-          <a id="lightbox-btn-download" href="#" download="pilgrimage-photo.webp" rel="noopener noreferrer" aria-label="下載照片" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 transition" title="下載照片">
+          <a id="lightbox-btn-download" href="#" download="pilgrimage-photo.webp" rel="noopener noreferrer" aria-label="下載照片" class="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 transition" title="下載照片">
             <i data-lucide="download" class="w-4 h-4"></i>
           </a>
           <form method="dialog" class="inline-flex">
-            <button type="submit" autofocus aria-label="關閉照片檢視" class="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-600 text-slate-200 hover:text-white transition" title="關閉 (Esc)">
+            <button type="submit" autofocus aria-label="關閉照片檢視" class="p-1.5 rounded-lg bg-zinc-800 hover:bg-red-700 border border-zinc-700 text-zinc-200 hover:text-white transition" title="關閉 (Esc)">
               <i data-lucide="x" class="w-4 h-4"></i>
             </button>
           </form>
         </div>
       </div>
 
-      <div id="lightbox-stage" class="relative flex items-center justify-center bg-black/90 overflow-auto max-h-[78dvh] min-h-[240px] min-w-[260px] sm:min-w-[420px]">
+      <div id="lightbox-stage" class="relative flex items-center justify-center bg-black/95 overflow-auto max-h-[78dvh] min-h-[240px] min-w-[260px] sm:min-w-[420px]">
         <img id="lightbox-img" src="" alt="參拜完整大圖" class="max-w-[90vw] max-h-[76dvh] w-auto h-auto object-contain select-none transition-all duration-200 cursor-zoom-in" />
 
-        <button type="button" id="lightbox-btn-prev" aria-label="上一張照片" class="hidden absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/65 hover:bg-black/90 text-white border border-white/20 flex items-center justify-center shadow-lg transition">
+        <button type="button" id="lightbox-btn-prev" aria-label="上一張照片" class="hidden absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-zinc-900/80 hover:bg-red-700 text-white border border-zinc-700 flex items-center justify-center shadow-lg transition">
           <i data-lucide="chevron-left" class="w-5 h-5"></i>
         </button>
-        <button type="button" id="lightbox-btn-next" aria-label="下一張照片" class="hidden absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/65 hover:bg-black/90 text-white border border-white/20 flex items-center justify-center shadow-lg transition">
+        <button type="button" id="lightbox-btn-next" aria-label="下一張照片" class="hidden absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-zinc-900/80 hover:bg-red-700 text-white border border-zinc-700 flex items-center justify-center shadow-lg transition">
           <i data-lucide="chevron-right" class="w-5 h-5"></i>
         </button>
       </div>
     </div>
   </dialog>
 
-  <script src="temples_data.js?v=20261116_1540"></script>
-  <script src="firebase-config.js?v=20261116_1540"></script>
-  <script src="app.js?v=20261116_1540"></script>
+  <script src="temples_data.js?v=20261116_1555"></script>
+  <script src="firebase-config.js?v=20261116_1555"></script>
+  <script src="app.js?v=20261116_1555"></script>
 </body>
 </html>

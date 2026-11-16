@@ -148,7 +148,7 @@ function getValidPhotos(rawPhotos) {
 /**
  * 統一產生可點擊開啟大圖燈箱的相片縮圖卡片
  */
-function renderPhotoThumbCard(photo, templeId, validIdx, source, extraHtml = "", wrapperClass = "aspect-square rounded-xl overflow-hidden border border-slate-200 bg-slate-100 shadow-sm") {
+function renderPhotoThumbCard(photo, templeId, validIdx, source, extraHtml = "", wrapperClass = "aspect-square rounded-xl overflow-hidden border border-zinc-700 bg-zinc-950 shadow-sm") {
   const safeTid = escapeHtml(String(templeId || ""));
   const safeSource = escapeHtml(source);
   return `
@@ -158,7 +158,7 @@ function renderPhotoThumbCard(photo, templeId, validIdx, source, extraHtml = "",
               data-lightbox-index="${validIdx}"
               data-lightbox-source="${safeSource}"
               aria-label="放大檢視第 ${validIdx + 1} 張參拜照片"
-              class="block w-full h-full p-0 border-0 bg-transparent cursor-pointer focus-visible:outline-2 focus-visible:outline-brand-gold">
+              class="block w-full h-full p-0 border-0 bg-transparent cursor-pointer focus-visible:outline-2 focus-visible:outline-red-500">
         <img src="${photo.safeUrl}" loading="lazy" class="w-full h-full object-cover hover:scale-105 transition duration-300" alt="參拜照片 ${validIdx + 1}" />
       </button>
       ${extraHtml}
@@ -461,10 +461,10 @@ function initFirebaseEngine() {
 
   if (!window.isFirebaseConfigured || !window.isFirebaseConfigured()) {
     // 尚未配置 Firebase，自動降級為純本機離線模式
-    if (indicator) indicator.className = "w-2 h-2 rounded-full bg-slate-400";
+    if (indicator) indicator.className = "w-2 h-2 rounded-full bg-zinc-400";
     if (statusText) statusText.textContent = "本機離線模式";
     if (settingsBadge) {
-      settingsBadge.className = "text-xs px-2.5 py-1 rounded-full font-bold bg-slate-100 text-slate-600";
+      settingsBadge.className = "text-xs px-2.5 py-1 rounded-full font-bold bg-zinc-800 text-zinc-300 border border-zinc-700";
       settingsBadge.textContent = "未配置 (本機模式)";
     }
     if (settingsDesc) {
@@ -546,7 +546,7 @@ function initFirebaseEngine() {
     });
 
     if (settingsBadge) {
-      settingsBadge.className = "text-xs px-2.5 py-1 rounded-full font-bold bg-emerald-100 text-emerald-700";
+      settingsBadge.className = "text-xs px-2.5 py-1 rounded-full font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-800/70";
       settingsBadge.textContent = "已連線 (雲端同步中)";
     }
     if (settingsDesc) {
@@ -570,22 +570,22 @@ function setCloudStatus(state, text) {
     if (state === "online") {
       indicator.className = "w-2 h-2 rounded-full bg-emerald-400";
     } else if (state === "syncing") {
-      indicator.className = "w-2 h-2 rounded-full bg-amber-400 animate-ping";
+      indicator.className = "w-2 h-2 rounded-full bg-red-400 animate-ping";
     } else {
-      indicator.className = "w-2 h-2 rounded-full bg-rose-400";
+      indicator.className = "w-2 h-2 rounded-full bg-red-500";
     }
   }
   if (statusText) statusText.textContent = text;
 
   if (settingsBadge) {
     if (state === "online") {
-      settingsBadge.className = "text-xs px-2.5 py-1 rounded-full font-bold bg-emerald-100 text-emerald-700";
+      settingsBadge.className = "text-xs px-2.5 py-1 rounded-full font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-800/70";
       settingsBadge.textContent = "🟢 雲端已連線";
     } else if (state === "syncing") {
-      settingsBadge.className = "text-xs px-2.5 py-1 rounded-full font-bold bg-amber-100 text-amber-700";
-      settingsBadge.textContent = "🟡 同步中...";
+      settingsBadge.className = "text-xs px-2.5 py-1 rounded-full font-bold bg-zinc-800 text-zinc-200 border border-zinc-700";
+      settingsBadge.textContent = "🔄 同步中...";
     } else {
-      settingsBadge.className = "text-xs px-2.5 py-1 rounded-full font-bold bg-rose-100 text-rose-700";
+      settingsBadge.className = "text-xs px-2.5 py-1 rounded-full font-bold bg-red-950/80 text-red-300 border border-red-800/70";
       settingsBadge.textContent = "🔴 離線 / 未連線";
     }
   }
@@ -994,22 +994,22 @@ document.addEventListener("visibilitychange", () => {
 });
 
 function createPinIcon(status) {
-  let bgColor = "#1b3b52";
-  let borderColor = "#ffffff";
+  let bgColor = "#18181b";
+  let borderColor = "#e4e4e7";
 
   if (status === "visited") {
     bgColor = "#059669";
     borderColor = "#a7f3d0";
   } else if (status === "planned") {
-    bgColor = "#d97706";
-    borderColor = "#fde68a";
+    bgColor = "#dc2626";
+    borderColor = "#fecaca";
   }
 
   const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="30" height="30">
       <defs>
         <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-          <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#000000" flood-opacity="0.3"/>
+          <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#000000" flood-opacity="0.45"/>
         </filter>
       </defs>
       <path fill="${bgColor}" stroke="${borderColor}" stroke-width="1.8" filter="url(#shadow)"
@@ -1057,40 +1057,40 @@ function renderMapMarkers() {
     const icon = createPinIcon(status);
     const marker = L.marker([t.lat, t.lon], { icon });
 
-    const statusLabel = status === "visited" ? '<span class="inline-flex items-center gap-1 text-emerald-700 bg-emerald-100 font-bold px-2 py-0.5 rounded-full text-[11px]">🟢 已參拜</span>' :
-                        status === "planned" ? '<span class="inline-flex items-center gap-1 text-amber-700 bg-amber-100 font-bold px-2 py-0.5 rounded-full text-[11px]">🟡 規劃中</span>' :
-                        '<span class="inline-flex items-center gap-1 text-slate-600 bg-slate-100 font-bold px-2 py-0.5 rounded-full text-[11px]">⚪ 未參拜</span>';
+    const statusLabel = status === "visited" ? '<span class="inline-flex items-center gap-1 text-emerald-300 bg-emerald-950/90 border border-emerald-800/70 font-bold px-2 py-0.5 rounded-full text-[11px]">🟢 已參拜</span>' :
+                        status === "planned" ? '<span class="inline-flex items-center gap-1 text-red-300 bg-red-950/90 border border-red-800/70 font-bold px-2 py-0.5 rounded-full text-[11px]">🔴 規劃中</span>' :
+                        '<span class="inline-flex items-center gap-1 text-zinc-300 bg-zinc-800 border border-zinc-700 font-bold px-2 py-0.5 rounded-full text-[11px]">⚫ 未參拜</span>';
 
     const popupHtml = `
       <div class="text-xs space-y-2.5 font-sans w-[280px] sm:w-[310px] select-text">
         <!-- 頂部標題列：廟名享有完整空間，右側預留 pr-8 避讓關閉按鈕 -->
         <div class="pr-8">
-          <strong class="text-[15px] font-bold text-slate-900 leading-snug tracking-tight block">${escapeHtml(t.name)}</strong>
+          <strong class="text-[15px] font-bold text-zinc-50 leading-snug tracking-tight block">${escapeHtml(t.name)}</strong>
         </div>
 
         <!-- 狀態與縣市行政區列：徹底垂直分離於關閉按鈕下方，完全避免重疊與誤觸 -->
         <div class="flex items-center gap-2 flex-wrap">
           ${statusLabel}
-          <span class="text-slate-500 font-medium text-xs flex items-center gap-1">
-            <span class="w-1 h-1 rounded-full bg-slate-300"></span>
+          <span class="text-zinc-400 font-medium text-xs flex items-center gap-1">
+            <span class="w-1 h-1 rounded-full bg-zinc-600"></span>
             ${escapeHtml(t.county)} ${escapeHtml(t.district)}
           </span>
         </div>
 
-        <!-- 地址欄位：卡片化淺底色與圖示襯托，完整清晰折行 -->
-        <div class="text-[12px] text-slate-600 leading-relaxed break-words bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-100 flex items-start gap-1.5">
-          <span class="shrink-0 text-slate-400 mt-0.5">📍</span>
+        <!-- 地址欄位：卡片化深底色與圖示襯托，完整清晰折行 -->
+        <div class="text-[12px] text-zinc-300 leading-relaxed break-words bg-zinc-900 px-2.5 py-1.5 rounded-lg border border-zinc-800 flex items-start gap-1.5">
+          <span class="shrink-0 text-red-400 mt-0.5">📍</span>
           <span>${escapeHtml(t.address || "無詳細地址紀錄")}</span>
         </div>
 
         <!-- 操作按鈕列：擴大觸控面積與圓角質感 -->
         <div class="flex gap-2 pt-1">
           <a href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(t.lat)},${encodeURIComponent(t.lon)}" target="_blank"
-             class="flex-1 text-center py-2 bg-sky-500 hover:bg-sky-600 active:scale-95 text-white rounded-xl font-bold text-xs shadow-sm transition flex items-center justify-center gap-1">
+             class="flex-1 text-center py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 active:scale-95 text-zinc-100 rounded-xl font-bold text-xs shadow-sm transition flex items-center justify-center gap-1">
             <span>導航</span>
           </a>
           <button onclick="openTempleModal('${escapeHtml(t.id)}')"
-             class="flex-1 py-2 bg-brand-600 hover:bg-brand-500 active:scale-95 text-white rounded-xl font-bold text-xs shadow-sm transition flex items-center justify-center gap-1">
+             class="flex-1 py-2 bg-red-700 hover:bg-red-600 active:scale-95 text-white rounded-xl font-bold text-xs shadow-sm transition flex items-center justify-center gap-1">
             <span>打卡記事</span>
           </button>
         </div>
@@ -1202,11 +1202,11 @@ window.switchView = function(viewName) {
   document.querySelectorAll(".nav-tab").forEach(tab => {
     const isTarget = tab.getAttribute("onclick")?.includes(`'${viewName}'`);
     if (isTarget) {
-      tab.classList.add("bg-amber-100/70", "text-brand-600", "font-bold");
-      tab.classList.remove("text-slate-500", "hover:bg-slate-50", "font-medium");
+      tab.classList.add("bg-red-950/75", "text-red-400", "border-red-900/60", "font-bold");
+      tab.classList.remove("text-zinc-400", "hover:text-zinc-100", "hover:bg-zinc-900", "border-transparent", "font-medium");
     } else {
-      tab.classList.remove("bg-amber-100/70", "text-brand-600", "font-bold");
-      tab.classList.add("text-slate-500", "hover:bg-slate-50", "font-medium");
+      tab.classList.remove("bg-red-950/75", "text-red-400", "border-red-900/60", "font-bold");
+      tab.classList.add("text-zinc-400", "hover:text-zinc-100", "hover:bg-zinc-900", "border-transparent", "font-medium");
     }
   });
 
@@ -1311,8 +1311,8 @@ window.openTempleModal = async function(templeId) {
 
         if (metaEl) {
           metaEl.innerHTML = `
-            ${record.visitDate ? `<span class="text-[11px] bg-brand-gold/20 text-brand-600 font-bold px-2 py-0.5 rounded-full">📅 ${escapeHtml(record.visitDate)}</span>` : ''}
-            ${record.tags ? `<span class="text-[11px] bg-slate-200 text-slate-700 px-2 py-0.5 rounded-md">🏷️ ${escapeHtml(record.tags)}</span>` : ''}
+            ${record.visitDate ? `<span class="text-[11px] bg-red-950/90 text-red-300 border border-red-800/70 font-bold px-2 py-0.5 rounded-full">📅 ${escapeHtml(record.visitDate)}</span>` : ''}
+            ${record.tags ? `<span class="text-[11px] bg-zinc-800 text-zinc-300 border border-zinc-700 px-2 py-0.5 rounded-md">🏷️ ${escapeHtml(record.tags)}</span>` : ''}
           `;
         }
 
@@ -1327,7 +1327,7 @@ window.openTempleModal = async function(templeId) {
               .map((p, idx) => renderPhotoThumbCard(p, t.id, idx, "temp"))
               .join("");
           } else {
-            photosEl.innerHTML = '<p class="col-span-3 text-center text-xs text-slate-400 py-2">無現場相片</p>';
+            photosEl.innerHTML = '<p class="col-span-3 text-center text-xs text-zinc-400 py-2">無現場相片</p>';
           }
         }
       }
@@ -1345,20 +1345,20 @@ function updateModalStatusBadge(status) {
   const toggleBtn = document.getElementById("btn-toggle-status");
 
   if (status === "visited") {
-    badge.className = "text-xs font-semibold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-700";
+    badge.className = "text-xs font-semibold px-2 py-0.5 rounded-md bg-emerald-950/90 text-emerald-300 border border-emerald-800/70";
     badge.textContent = "🟢 已參拜";
     toggleBtn.innerHTML = '<i data-lucide="check-check" class="w-4 h-4"></i> 改為規劃中';
-    toggleBtn.className = "flex items-center justify-center gap-2 py-2.5 px-4 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold text-sm shadow transition";
+    toggleBtn.className = "flex items-center justify-center gap-2 py-2.5 px-4 bg-red-800 hover:bg-red-700 text-white rounded-xl font-bold text-sm shadow transition";
   } else if (status === "planned") {
-    badge.className = "text-xs font-semibold px-2 py-0.5 rounded-md bg-amber-100 text-amber-700";
-    badge.textContent = "🟡 規劃中";
+    badge.className = "text-xs font-semibold px-2 py-0.5 rounded-md bg-red-950/90 text-red-300 border border-red-800/70";
+    badge.textContent = "🔴 規劃中";
     toggleBtn.innerHTML = '<i data-lucide="check" class="w-4 h-4"></i> 標記為已參拜';
-    toggleBtn.className = "flex items-center justify-center gap-2 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm shadow transition";
+    toggleBtn.className = "flex items-center justify-center gap-2 py-2.5 px-4 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl font-bold text-sm shadow transition";
   } else {
-    badge.className = "text-xs font-semibold px-2 py-0.5 rounded-md bg-slate-100 text-slate-600";
-    badge.textContent = "⚪ 未參拜";
+    badge.className = "text-xs font-semibold px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-300 border border-zinc-700";
+    badge.textContent = "⚫ 未參拜";
     toggleBtn.innerHTML = '<i data-lucide="check" class="w-4 h-4"></i> 標記為已參拜';
-    toggleBtn.className = "flex items-center justify-center gap-2 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm shadow transition";
+    toggleBtn.className = "flex items-center justify-center gap-2 py-2.5 px-4 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl font-bold text-sm shadow transition";
   }
   if (window.lucide) lucide.createIcons();
 }
@@ -1370,18 +1370,18 @@ function renderModalPhotos() {
   const validPhotos = getValidPhotos(currentTempPhotos);
 
   if (validPhotos.length === 0) {
-    container.innerHTML = '<p id="no-photos-hint" class="col-span-3 text-center text-xs text-slate-400 py-4">尚未上傳照片</p>';
+    container.innerHTML = '<p id="no-photos-hint" class="col-span-3 text-center text-xs text-zinc-400 py-4">尚未上傳照片</p>';
     return;
   }
 
   const tid = currentActiveTemple?.id || "";
   container.innerHTML = validPhotos.map((p, idx) => {
     const deleteBtn = `
-      <button type="button" onclick="removePhoto(${p.rawIndex})" aria-label="移除這張照片" class="absolute top-1 right-1 bg-black/70 hover:bg-rose-600 text-white p-1 rounded-full text-[10px] transition z-10">
+      <button type="button" onclick="removePhoto(${p.rawIndex})" aria-label="移除這張照片" class="absolute top-1 right-1 bg-black/80 hover:bg-red-700 text-white p-1 rounded-full text-[10px] transition z-10">
         ✕
       </button>
     `;
-    return renderPhotoThumbCard(p, tid, idx, "temp", deleteBtn, "rounded-lg overflow-hidden border border-slate-200 aspect-square bg-slate-100");
+    return renderPhotoThumbCard(p, tid, idx, "temp", deleteBtn, "rounded-lg overflow-hidden border border-zinc-700 aspect-square bg-zinc-950");
   }).join("");
 }
 
@@ -1729,10 +1729,10 @@ function renderListView() {
 
   if (list.length === 0) {
     container.innerHTML = `
-      <div class="col-span-1 md:col-span-2 text-center text-slate-400 py-16 bg-white rounded-3xl border border-slate-200">
-        <i data-lucide="map-pin-off" class="w-12 h-12 mx-auto mb-3 text-slate-300"></i>
-        <h4 class="font-bold text-slate-700">無符合篩選條件的廟宇</h4>
-        <p class="text-xs text-slate-400 mt-1">請嘗試清除關鍵字或切換其他縣市／鄉鎮市區進行查找。</p>
+      <div class="col-span-1 md:col-span-2 text-center text-zinc-400 py-16 bg-zinc-900 rounded-3xl border border-zinc-800">
+        <i data-lucide="map-pin-off" class="w-12 h-12 mx-auto mb-3 text-zinc-600"></i>
+        <h4 class="font-bold text-zinc-200">無符合篩選條件的廟宇</h4>
+        <p class="text-xs text-zinc-400 mt-1">請嘗試清除關鍵字或切換其他縣市／鄉鎮市區進行查找。</p>
       </div>
     `;
     if (window.lucide) lucide.createIcons();
@@ -1742,33 +1742,33 @@ function renderListView() {
   container.innerHTML = list.map(t => {
     const record = userRecordsMap[t.id];
     const status = record?.status || "unvisited";
-    const statusBadge = status === "visited" ? '<span class="text-xs font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">已參拜</span>' :
-                        status === "planned" ? '<span class="text-xs font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">規劃中</span>' :
-                        '<span class="text-xs font-bold text-slate-500 bg-slate-200 px-2 py-0.5 rounded-full">未參拜</span>';
+    const statusBadge = status === "visited" ? '<span class="text-xs font-bold text-emerald-300 bg-emerald-950/90 border border-emerald-800/70 px-2 py-0.5 rounded-full">已參拜</span>' :
+                        status === "planned" ? '<span class="text-xs font-bold text-red-300 bg-red-950/90 border border-red-800/70 px-2 py-0.5 rounded-full">規劃中</span>' :
+                        '<span class="text-xs font-bold text-zinc-300 bg-zinc-800 border border-zinc-700 px-2 py-0.5 rounded-full">未參拜</span>';
 
     const photoCount = templePhotosMap[t.id]?.length || 0;
-    const photoBadge = photoCount > 0 ? `<span class="text-[11px] text-brand-600 bg-brand-50 px-1.5 py-0.5 rounded flex items-center gap-1"><i data-lucide="image" class="w-3 h-3"></i> ${photoCount} 張</span>` : '';
+    const photoBadge = photoCount > 0 ? `<span class="text-[11px] text-red-300 bg-red-950/70 border border-red-900/60 px-1.5 py-0.5 rounded flex items-center gap-1"><i data-lucide="image" class="w-3 h-3"></i> ${photoCount} 張</span>` : '';
 
     return `
-      <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm hover:shadow-md transition flex flex-col justify-between">
+      <div class="bg-zinc-900 rounded-2xl p-4 border border-zinc-800 hover:border-zinc-700 shadow-sm hover:shadow-md transition flex flex-col justify-between">
         <div class="space-y-1.5">
           <div class="flex items-center justify-between">
-            <span class="text-xs text-brand-600 font-bold">${escapeHtml(t.county)} ${escapeHtml(t.district)}</span>
+            <span class="text-xs text-red-400 font-bold">${escapeHtml(t.county)} ${escapeHtml(t.district)}</span>
             ${statusBadge}
           </div>
-          <h4 class="font-bold text-base text-slate-800">${escapeHtml(t.name)}</h4>
-          <p class="text-xs text-slate-500 line-clamp-1">${escapeHtml(t.address || "無詳細地址")}</p>
-          ${record?.notes && record.notes.trim() ? `<p class="text-xs text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-100 line-clamp-2">💬 ${escapeHtml(record.notes.trim())}</p>` : ''}
+          <h4 class="font-bold text-base text-zinc-50">${escapeHtml(t.name)}</h4>
+          <p class="text-xs text-zinc-400 line-clamp-1">${escapeHtml(t.address || "無詳細地址")}</p>
+          ${record?.notes && record.notes.trim() ? `<p class="text-xs text-zinc-300 bg-zinc-950 p-2 rounded-lg border border-zinc-800 line-clamp-2">💬 ${escapeHtml(record.notes.trim())}</p>` : ''}
         </div>
 
-        <div class="flex items-center justify-between pt-3 mt-2 border-t border-slate-100">
+        <div class="flex items-center justify-between pt-3 mt-2 border-t border-zinc-800">
           <div class="flex items-center gap-2">
             ${photoBadge}
-            ${record?.visitDate ? `<span class="text-[11px] text-slate-400">📅 ${escapeHtml(record.visitDate)}</span>` : ''}
+            ${record?.visitDate ? `<span class="text-[11px] text-zinc-400">📅 ${escapeHtml(record.visitDate)}</span>` : ''}
           </div>
           <div class="flex gap-2">
-            ${t.lat && t.lon ? `<a href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(t.lat)},${encodeURIComponent(t.lon)}" target="_blank" class="px-2.5 py-1 bg-sky-50 text-sky-600 hover:bg-sky-100 text-xs font-bold rounded-lg transition">導航</a>` : ''}
-            <button onclick="openTempleModal('${escapeHtml(String(t.id || ''))}')" class="px-3 py-1 bg-brand-600 text-white hover:bg-brand-500 text-xs font-bold rounded-lg transition">${currentUser ? '打卡/編輯' : '詳情'}</button>
+            ${t.lat && t.lon ? `<a href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(t.lat)},${encodeURIComponent(t.lon)}" target="_blank" class="px-2.5 py-1 bg-zinc-800 text-zinc-200 hover:bg-zinc-700 border border-zinc-700 text-xs font-bold rounded-lg transition">導航</a>` : ''}
+            <button onclick="openTempleModal('${escapeHtml(String(t.id || ''))}')" class="px-3 py-1 bg-red-700 text-white hover:bg-red-600 text-xs font-bold rounded-lg transition">${currentUser ? '打卡/編輯' : '詳情'}</button>
           </div>
         </div>
       </div>
@@ -1880,13 +1880,13 @@ function renderDashboardChips() {
 
     const baseClass = "px-3 py-1 rounded-xl font-bold transition text-xs shrink-0 cursor-pointer flex items-center gap-1.5 ";
     const activeClass = isActive 
-      ? "bg-brand-600 text-white shadow-sm border border-brand-700 ring-2 ring-brand-300"
-      : "bg-white text-slate-700 hover:bg-slate-100 border border-slate-200";
+      ? "bg-red-700 text-white shadow-sm border border-red-500 ring-1 ring-red-400/70"
+      : "bg-zinc-900 text-zinc-300 hover:bg-zinc-800 border border-zinc-800";
 
     return `
       <button onclick="setDashboardScope('${c}')" class="${baseClass} ${activeClass}">
         <span>${escapeHtml(label)}</span>
-        <span class="text-[10px] ${isActive ? 'text-amber-200' : 'text-slate-400'}">(${count})</span>
+        <span class="text-[10px] ${isActive ? 'text-red-200' : 'text-zinc-400'}">(${count})</span>
       </button>
     `;
   }).join("");
@@ -2006,22 +2006,22 @@ function renderDashboardDistricts() {
     const p = Math.round((d.visited / d.total) * 100);
     return `
       <div onclick="jumpToDistrictList('${escapeHtml(currentDashboardScope)}', '${escapeHtml(d.name)}')" 
-           class="p-3.5 bg-slate-50 hover:bg-white rounded-2xl border border-slate-200 hover:border-brand-300 hover:shadow-md transition group cursor-pointer">
+           class="p-3.5 bg-zinc-950 hover:bg-zinc-800/80 rounded-2xl border border-zinc-800 hover:border-red-700/70 hover:shadow-md transition group cursor-pointer">
         <div class="flex items-center justify-between">
-          <div class="font-bold text-slate-800 text-sm group-hover:text-brand-600 transition flex items-center gap-1.5">
+          <div class="font-bold text-zinc-100 text-sm group-hover:text-red-400 transition flex items-center gap-1.5">
             <span>${escapeHtml(d.name)}</span>
-            <i data-lucide="chevron-right" class="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition text-brand-600"></i>
+            <i data-lucide="chevron-right" class="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition text-red-400"></i>
           </div>
-          <span class="text-xs font-black ${p > 0 ? 'text-brand-600' : 'text-slate-400'}">${p}%</span>
+          <span class="text-xs font-black ${p > 0 ? 'text-red-400' : 'text-zinc-400'}">${p}%</span>
         </div>
-        <div class="w-full bg-slate-200 h-2 rounded-full mt-2.5 overflow-hidden">
-          <div class="bg-brand-600 h-full rounded-full transition-all duration-300" style="width: ${p}%"></div>
+        <div class="w-full bg-zinc-800 h-2 rounded-full mt-2.5 overflow-hidden">
+          <div class="bg-red-600 h-full rounded-full transition-all duration-300" style="width: ${p}%"></div>
         </div>
-        <div class="flex items-center justify-between text-[11px] text-slate-500 mt-2.5 pt-1 border-t border-slate-100/60">
+        <div class="flex items-center justify-between text-[11px] text-zinc-400 mt-2.5 pt-1 border-t border-zinc-800/80">
           <span class="font-medium">${d.visited} / ${d.total} 間</span>
           <div class="flex items-center gap-1.5 text-[10px]">
-            <span class="text-emerald-700 font-bold">🟢 ${d.visited}</span>
-            ${d.planned > 0 ? `<span class="text-amber-700 font-bold">🟡 ${d.planned}</span>` : ''}
+            <span class="text-emerald-400 font-bold">🟢 ${d.visited}</span>
+            ${d.planned > 0 ? `<span class="text-red-400 font-bold">🔴 ${d.planned}</span>` : ''}
           </div>
         </div>
       </div>
@@ -2072,39 +2072,39 @@ function renderDashboardCountyList() {
     const isSelected = currentDashboardScope === stat.county;
 
     const cardClass = isSelected
-      ? "bg-brand-50/60 border-brand-400 ring-2 ring-brand-400 shadow-sm"
-      : "bg-slate-50 hover:bg-white border-slate-200 hover:border-brand-200 hover:shadow-sm";
+      ? "bg-red-950/35 border-red-600 ring-1 ring-red-600 shadow-sm"
+      : "bg-zinc-950 hover:bg-zinc-800/80 border-zinc-800 hover:border-red-900/70 hover:shadow-sm";
 
     return `
       <div onclick="setDashboardScope('${escapeHtml(stat.county)}')" 
            class="p-4 rounded-2xl border transition cursor-pointer group space-y-2.5 ${cardClass}">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
-            <span class="font-extrabold text-sm text-slate-800 group-hover:text-brand-700 transition flex items-center gap-1">
+            <span class="font-extrabold text-sm text-zinc-100 group-hover:text-red-400 transition flex items-center gap-1">
               ${escapeHtml(stat.county)}
-              ${isSelected ? '<span class="text-[10px] bg-brand-600 text-white px-1.5 py-0.5 rounded font-medium">焦點</span>' : ''}
+              ${isSelected ? '<span class="text-[10px] bg-red-700 text-white px-1.5 py-0.5 rounded font-medium">焦點</span>' : ''}
             </span>
           </div>
           <div class="flex items-center gap-2">
-            <span class="text-xs font-black ${p > 0 ? 'text-brand-600' : 'text-slate-400'}">${p}%</span>
+            <span class="text-xs font-black ${p > 0 ? 'text-red-400' : 'text-zinc-400'}">${p}%</span>
             <button onclick="event.stopPropagation(); quickFilterList('${escapeHtml(stat.county)}'); switchView('list');" 
                     title="在廟宇名錄中查看"
-                    class="text-[11px] text-slate-400 hover:text-brand-600 px-1.5 py-0.5 rounded hover:bg-slate-100 transition">
+                    class="text-[11px] text-zinc-400 hover:text-red-300 px-1.5 py-0.5 rounded hover:bg-zinc-800 transition">
               名錄 ↗
             </button>
           </div>
         </div>
 
-        <div class="w-full bg-slate-200/80 h-2.5 rounded-full overflow-hidden">
-          <div class="bg-brand-600 h-full rounded-full transition-all duration-300" style="width: ${p}%"></div>
+        <div class="w-full bg-zinc-800 h-2.5 rounded-full overflow-hidden">
+          <div class="bg-gradient-to-r from-red-700 to-red-500 h-full rounded-full transition-all duration-300" style="width: ${p}%"></div>
         </div>
 
-        <div class="flex items-center justify-between text-xs text-slate-500 pt-1">
-          <span class="font-medium text-slate-600">${stat.visited} / ${stat.total} 間</span>
+        <div class="flex items-center justify-between text-xs text-zinc-400 pt-1">
+          <span class="font-medium text-zinc-300">${stat.visited} / ${stat.total} 間</span>
           <div class="flex items-center gap-2 text-[11px]">
-            <span class="text-emerald-700 font-semibold">🟢 ${stat.visited}</span>
-            <span class="text-amber-700 font-semibold">🟡 ${stat.planned}</span>
-            <span class="text-slate-400 font-medium">⚪ ${stat.unvisited}</span>
+            <span class="text-emerald-400 font-semibold">🟢 ${stat.visited}</span>
+            <span class="text-red-400 font-semibold">🔴 ${stat.planned}</span>
+            <span class="text-zinc-400 font-medium">⚫ ${stat.unvisited}</span>
           </div>
         </div>
       </div>
@@ -2132,10 +2132,10 @@ function renderTimelineView() {
 
   if (logs.length === 0) {
     container.innerHTML = `
-      <div class="bg-white rounded-3xl p-8 text-center text-slate-400 border border-slate-200">
-        <i data-lucide="compass" class="w-12 h-12 mx-auto mb-3 text-slate-300"></i>
-        <h4 class="font-bold text-slate-600">尚無參拜記錄</h4>
-        <p class="text-xs text-slate-400 mt-1">至「朝聖地圖」點選任一廟宇進行現場打卡與拍照吧！</p>
+      <div class="bg-zinc-900 rounded-3xl p-8 text-center text-zinc-400 border border-zinc-800">
+        <i data-lucide="compass" class="w-12 h-12 mx-auto mb-3 text-zinc-600"></i>
+        <h4 class="font-bold text-zinc-200">尚無參拜記錄</h4>
+        <p class="text-xs text-zinc-400 mt-1">至「朝聖地圖」點選任一廟宇進行現場打卡與拍照吧！</p>
       </div>
     `;
     if (window.lucide) lucide.createIcons();
@@ -2153,25 +2153,25 @@ function renderTimelineView() {
     ` : '';
 
     return `
-      <div class="bg-white rounded-3xl p-5 md:p-6 border border-slate-200 shadow-sm space-y-3">
-        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+      <div class="bg-zinc-900 rounded-3xl p-5 md:p-6 border border-zinc-800 shadow-lg space-y-3">
+        <div class="flex items-center justify-between border-b border-zinc-800 pb-3">
           <div class="flex items-center gap-2">
-            <span class="text-xs bg-brand-gold/20 text-brand-600 font-bold px-2.5 py-1 rounded-full">
+            <span class="text-xs bg-red-950/90 text-red-300 border border-red-800/70 font-bold px-2.5 py-1 rounded-full">
               📅 ${escapeHtml(log.visitDate || "未填日期")}
             </span>
-            ${log.tags ? `<span class="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md">🏷️ ${escapeHtml(log.tags)}</span>` : ''}
+            ${log.tags ? `<span class="text-xs bg-zinc-800 text-zinc-300 border border-zinc-700 px-2 py-0.5 rounded-md">🏷️ ${escapeHtml(log.tags)}</span>` : ''}
           </div>
-          <button onclick="openTempleModal('${escapeHtml(String(t.id || ''))}')" class="text-xs text-brand-600 hover:underline font-bold">${currentUser ? '編輯' : '查看詳情'}</button>
+          <button onclick="openTempleModal('${escapeHtml(String(t.id || ''))}')" class="text-xs text-red-400 hover:underline font-bold">${currentUser ? '編輯' : '查看詳情'}</button>
         </div>
 
         <div>
-          <div class="text-xs text-slate-400">${escapeHtml(t.county || "")} ${escapeHtml(t.district || "")}</div>
-          <h3 class="font-extrabold text-xl text-slate-800">${escapeHtml(t.name || "")}</h3>
-          <p class="text-xs text-slate-500 mt-0.5">${escapeHtml(t.address || "")}</p>
+          <div class="text-xs text-red-400 font-semibold">${escapeHtml(t.county || "")} ${escapeHtml(t.district || "")}</div>
+          <h3 class="font-extrabold text-xl text-zinc-50">${escapeHtml(t.name || "")}</h3>
+          <p class="text-xs text-zinc-400 mt-0.5">${escapeHtml(t.address || "")}</p>
         </div>
 
         ${log.notes && log.notes.trim() ? `
-          <div class="text-sm text-slate-700 bg-slate-50 p-3.5 md:p-4 rounded-2xl border border-slate-100 whitespace-pre-wrap leading-relaxed break-words">${escapeHtml(log.notes.trim())}</div>
+          <div class="text-sm text-zinc-200 bg-zinc-950 p-3.5 md:p-4 rounded-2xl border border-zinc-800 whitespace-pre-wrap leading-relaxed break-words">${escapeHtml(log.notes.trim())}</div>
         ` : ''}
 
         ${photosGrid}
@@ -2500,9 +2500,9 @@ window.setStartMode = function(mode) {
     const panel = document.getElementById(`start-panel-${m}`);
     if (btn) {
       if (m === mode) {
-        btn.className = "py-2 rounded-lg bg-white text-brand-600 shadow-sm transition flex items-center justify-center gap-1 font-bold";
+        btn.className = "py-2 rounded-lg bg-red-700 text-white shadow-sm transition flex items-center justify-center gap-1 font-bold";
       } else {
-        btn.className = "py-2 rounded-lg text-slate-600 hover:text-slate-900 transition flex items-center justify-center gap-1";
+        btn.className = "py-2 rounded-lg text-zinc-400 hover:text-zinc-100 transition flex items-center justify-center gap-1";
       }
     }
     if (panel) panel.classList.toggle("hidden", m !== mode);
@@ -2522,7 +2522,7 @@ window.requestCurrentLocation = function() {
       const lat = pos.coords.latitude;
       const lon = pos.coords.longitude;
       plannerStartPoint = { type: 'gps', name: '我的目前位置 (GPS)', lat, lon };
-      if (statusEl) statusEl.innerHTML = `<span class="text-emerald-700 font-bold">✓ 已定位 (${lat.toFixed(4)}, ${lon.toFixed(4)})</span>`;
+      if (statusEl) statusEl.innerHTML = `<span class="text-emerald-400 font-bold">✓ 已定位 (${lat.toFixed(4)}, ${lon.toFixed(4)})</span>`;
       updatePlannerStartStatusUI();
     },
     (err) => {
@@ -2705,7 +2705,7 @@ function initPlannerRegionUI() {
 
   countyChipsContainer.innerHTML = allCounties.map(c => `
     <button type="button" onclick="switchPlannerCounty('${c}')" id="chip-county-${c}"
-      class="county-chip px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition ${c === plannerCurrentCounty ? 'bg-brand-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}">
+      class="county-chip px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition ${c === plannerCurrentCounty ? 'bg-red-700 text-white border border-red-500/60 shadow-sm' : 'bg-zinc-800 text-zinc-300 border border-zinc-700 hover:bg-zinc-700'}">
       ${c}
     </button>
   `).join("");
@@ -2720,7 +2720,7 @@ window.switchPlannerCounty = function(county) {
   plannerCurrentCounty = county;
   document.querySelectorAll(".county-chip").forEach(btn => {
     const isCur = btn.id === `chip-county-${county}`;
-    btn.className = `county-chip px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition ${isCur ? 'bg-brand-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`;
+    btn.className = `county-chip px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition ${isCur ? 'bg-red-700 text-white border border-red-500/60 shadow-sm' : 'bg-zinc-800 text-zinc-300 border border-zinc-700 hover:bg-zinc-700'}`;
   });
 
   const labelEl = document.getElementById("planner-current-county-label");
@@ -2745,9 +2745,9 @@ function renderDistrictChipsForCounty(county) {
     const isSelected = plannerSelectedDistricts.has(key);
     return `
       <button type="button" onclick="toggleDistrictSelection('${county}', '${d}')" id="chip-dist-${county}-${d}"
-        class="px-2.5 py-1 rounded-lg text-xs font-medium transition flex items-center gap-1 ${isSelected ? 'bg-amber-500 text-white shadow-sm font-bold' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'}">
+        class="px-2.5 py-1 rounded-lg text-xs font-medium transition flex items-center gap-1 ${isSelected ? 'bg-red-700 text-white border border-red-500/60 shadow-sm font-bold' : 'bg-zinc-900 border border-zinc-700 text-zinc-300 hover:bg-zinc-800'}">
         <span>${d}</span>
-        <span class="text-[10px] opacity-75">(${distCounts[d]})</span>
+        <span class="text-[10px] opacity-80">(${distCounts[d]})</span>
       </button>
     `;
   }).join("");
@@ -2831,9 +2831,9 @@ function updatePlannerRegionSummary() {
       summaryBox.classList.remove("hidden");
       const list = Array.from(plannerSelectedDistricts);
       summaryBox.innerHTML = `
-        <div class="w-full flex items-center justify-between pb-1.5 mb-1 border-b border-amber-200/70 text-[11px] text-amber-900 font-bold">
+        <div class="w-full flex items-center justify-between pb-1.5 mb-1 border-b border-red-900/60 text-[11px] text-red-300 font-bold">
           <span>已選取 ${list.length} 個行政區</span>
-          <button type="button" onclick="clearAllSelectedDistricts()" class="text-rose-600 hover:text-rose-700 hover:underline flex items-center gap-1 font-bold cursor-pointer transition">
+          <button type="button" onclick="clearAllSelectedDistricts()" class="text-red-400 hover:text-red-300 hover:underline flex items-center gap-1 font-bold cursor-pointer transition">
             <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
             </svg>
@@ -2843,9 +2843,9 @@ function updatePlannerRegionSummary() {
       ` + list.map(item => {
         const [c, d] = item.split(":");
         return `
-          <span class="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-100/80 text-amber-800 rounded-md text-xs font-semibold">
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 bg-red-950/80 text-red-200 border border-red-800/60 rounded-md text-xs font-semibold">
             ${c} ${d}
-            <button type="button" onclick="toggleDistrictSelection('${c}', '${d}')" class="hover:text-rose-600 font-black cursor-pointer">×</button>
+            <button type="button" onclick="toggleDistrictSelection('${c}', '${d}')" class="hover:text-white font-black cursor-pointer">×</button>
           </span>
         `;
       }).join("");
@@ -2947,15 +2947,15 @@ function renderRouteStops() {
   const stopsHtml = [
     // 起點標記卡片
     `
-      <div class="flex items-center justify-between p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-xs">
+      <div class="flex items-center justify-between p-3 bg-emerald-950/50 rounded-xl border border-emerald-800/70 text-xs">
         <div class="flex items-center gap-2">
-          <span class="w-6 h-6 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-xs">🏁</span>
+          <span class="w-6 h-6 rounded-full bg-emerald-700 text-white font-bold flex items-center justify-center text-xs">🏁</span>
           <div>
-            <strong class="text-emerald-900 font-bold">出發起點：${escapeHtml(plannerStartPoint.name)}</strong>
-            <p class="text-[11px] text-emerald-700">座標 (${plannerStartPoint.lat.toFixed(4)}, ${plannerStartPoint.lon.toFixed(4)})</p>
+            <strong class="text-emerald-300 font-bold">出發起點：${escapeHtml(plannerStartPoint.name)}</strong>
+            <p class="text-[11px] text-emerald-400/90">座標 (${plannerStartPoint.lat.toFixed(4)}, ${plannerStartPoint.lon.toFixed(4)})</p>
           </div>
         </div>
-        <span class="text-[11px] text-emerald-600 font-semibold">起點出發</span>
+        <span class="text-[11px] text-emerald-300 font-semibold">起點出發</span>
       </div>
     `
   ];
@@ -2966,29 +2966,29 @@ function renderRouteStops() {
     prevPos = { lat: t.lat, lon: t.lon };
 
     stopsHtml.push(`
-      <div class="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-200 hover:border-amber-400 text-xs shadow-sm transition">
+      <div class="flex items-center justify-between p-3 bg-zinc-950 rounded-xl border border-zinc-800 hover:border-red-700/70 text-xs shadow-sm transition">
         <div class="flex items-center gap-3">
-          <span class="w-6 h-6 rounded-full bg-brand-gold text-brand-600 font-black flex items-center justify-center text-xs shrink-0 shadow-inner">
+          <span class="w-6 h-6 rounded-full bg-red-700 text-white font-black flex items-center justify-center text-xs shrink-0 shadow-inner">
             ${idx + 1}
           </span>
           <div>
-            <strong class="text-sm font-bold text-slate-800">${escapeHtml(t.name)}</strong>
-            <p class="text-[11px] text-slate-500">${escapeHtml(t.county)} ${escapeHtml(t.district)}・${escapeHtml(t.address || "無詳細地址")}</p>
+            <strong class="text-sm font-bold text-zinc-100">${escapeHtml(t.name)}</strong>
+            <p class="text-[11px] text-zinc-400">${escapeHtml(t.county)} ${escapeHtml(t.district)}・${escapeHtml(t.address || "無詳細地址")}</p>
           </div>
         </div>
 
         <div class="flex items-center gap-2 shrink-0">
-          <span class="text-[11px] text-amber-700 font-bold bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+          <span class="text-[11px] text-red-300 font-bold bg-red-950/70 px-2 py-0.5 rounded-md border border-red-900/60">
             +${legKm.toFixed(1)} km
           </span>
           <div class="flex items-center gap-1">
-            <button type="button" onclick="moveRouteStop(${idx}, -1)" ${idx === 0 ? 'disabled class="opacity-25 p-1"' : 'class="p-1 hover:bg-slate-100 rounded text-slate-600"'} title="上移">
+            <button type="button" onclick="moveRouteStop(${idx}, -1)" ${idx === 0 ? 'disabled class="opacity-25 p-1 text-zinc-500"' : 'class="p-1 hover:bg-zinc-800 rounded text-zinc-300"'} title="上移">
               ▲
             </button>
-            <button type="button" onclick="moveRouteStop(${idx}, 1)" ${idx === plannerCalculatedRoute.length - 1 ? 'disabled class="opacity-25 p-1"' : 'class="p-1 hover:bg-slate-100 rounded text-slate-600"'} title="下移">
+            <button type="button" onclick="moveRouteStop(${idx}, 1)" ${idx === plannerCalculatedRoute.length - 1 ? 'disabled class="opacity-25 p-1 text-zinc-500"' : 'class="p-1 hover:bg-zinc-800 rounded text-zinc-300"'} title="下移">
               ▼
             </button>
-            <button type="button" onclick="removeRouteStop(${idx})" class="p-1 hover:bg-rose-50 text-rose-500 rounded" title="從路線中移除">
+            <button type="button" onclick="removeRouteStop(${idx})" class="p-1 hover:bg-red-950/80 text-red-400 rounded" title="從路線中移除">
               🗑️
             </button>
           </div>
@@ -3149,14 +3149,14 @@ function activateRouteOnMap(itinerary) {
   if (stops.length === 0) return;
   itinerary.name = getSanitizedItineraryName(itinerary.name, stops.length);
 
-  // 1. 繪製折線 Polyline (金色高雅虛線)
+  // 1. 繪製折線 Polyline (朱砂赤紅虛線)
   const latlngs = [
     [itinerary.startPoint.lat, itinerary.startPoint.lon],
     ...stops.map(t => [t.lat, t.lon])
   ];
 
   activeRoutePolyline = L.polyline(latlngs, {
-    color: "#b89025",
+    color: "#dc2626",
     weight: 5,
     opacity: 0.9,
     dashArray: "6, 8",
@@ -3166,7 +3166,7 @@ function activateRouteOnMap(itinerary) {
   // 2. 繪製起點圖釘
   const startIcon = L.divIcon({
     className: "custom-start-pin",
-    html: `<div style="background:#059669;color:#fff;font-weight:bold;font-size:11px;padding:3px 8px;border-radius:12px;border:2px solid #fff;box-shadow:0 3px 8px rgba(0,0,0,0.3);white-space:nowrap;display:flex;align-items:center;gap:3px;">🏁 起點</div>`,
+    html: `<div style="background:#18181b;color:#f4f4f5;font-weight:bold;font-size:11px;padding:3px 8px;border-radius:12px;border:2px solid #ef4444;box-shadow:0 3px 8px rgba(0,0,0,0.45);white-space:nowrap;display:flex;align-items:center;gap:3px;">🏁 起點</div>`,
     iconAnchor: [20, 20]
   });
   const startMarker = L.marker([itinerary.startPoint.lat, itinerary.startPoint.lon], { icon: startIcon });
@@ -3178,7 +3178,7 @@ function activateRouteOnMap(itinerary) {
     const numIcon = L.divIcon({
       className: "custom-route-step-pin",
       html: `
-        <div style="background:#d4af37;color:#132c3f;font-weight:900;font-size:12px;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 3px 8px rgba(0,0,0,0.35);">
+        <div style="background:#b91c1c;color:#ffffff;font-weight:900;font-size:12px;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid #fecaca;box-shadow:0 3px 8px rgba(0,0,0,0.45);">
           ${idx + 1}
         </div>
       `,
@@ -3187,12 +3187,12 @@ function activateRouteOnMap(itinerary) {
     });
     const m = L.marker([t.lat, t.lon], { icon: numIcon, zIndexOffset: 1000 + idx });
     m.bindPopup(`
-      <div class="text-xs p-1 space-y-1">
-        <strong class="text-sm font-bold text-slate-800">第 ${idx + 1} 站：${escapeHtml(t.name)}</strong>
-        <p class="text-slate-500">${escapeHtml(t.county)} ${escapeHtml(t.district)}</p>
+      <div class="text-xs p-1 space-y-1.5">
+        <strong class="text-sm font-bold text-zinc-50 block pr-6">第 ${idx + 1} 站：${escapeHtml(t.name)}</strong>
+        <p class="text-zinc-400">${escapeHtml(t.county)} ${escapeHtml(t.district)}</p>
         <div class="flex gap-1.5 pt-1">
-          <a href="https://www.google.com/maps/dir/?api=1&destination=${t.lat},${t.lon}" target="_blank" class="flex-1 text-center py-1 bg-sky-500 text-white rounded font-bold">導航前往</a>
-          <button onclick="openTempleModal('${t.id}')" class="flex-1 py-1 bg-brand-600 text-white rounded font-bold">打卡記事</button>
+          <a href="https://www.google.com/maps/dir/?api=1&destination=${t.lat},${t.lon}" target="_blank" class="flex-1 text-center py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-100 rounded-lg font-bold">導航前往</a>
+          <button onclick="openTempleModal('${t.id}')" class="flex-1 py-1.5 bg-red-700 hover:bg-red-600 text-white rounded-lg font-bold">打卡記事</button>
         </div>
       </div>
     `);
@@ -3232,11 +3232,11 @@ function updateRouteNavDrawer() {
   if (activeRouteStopIndex >= stops.length) {
     drawer.innerHTML = `
       <div class="text-center p-3 space-y-2">
-        <h4 class="font-bold text-sm text-emerald-800 flex items-center justify-center gap-1.5">
+        <h4 class="font-bold text-sm text-emerald-400 flex items-center justify-center gap-1.5">
           🎉 恭喜！本趟朝聖路線已全數參拜圓滿！
         </h4>
-        <p class="text-xs text-slate-500">已拜訪全數 ${stops.length} 間廟宇。</p>
-        <button onclick="clearActiveRoute()" class="px-4 py-2 bg-brand-600 text-white text-xs font-bold rounded-xl shadow">結束路線</button>
+        <p class="text-xs text-zinc-400">已拜訪全數 ${stops.length} 間廟宇。</p>
+        <button onclick="clearActiveRoute()" class="px-4 py-2 bg-red-700 hover:bg-red-600 text-white text-xs font-bold rounded-xl shadow">結束路線</button>
       </div>
     `;
     drawer.classList.remove("hidden");
@@ -3280,14 +3280,14 @@ function renderDrawerStopsList(stops) {
     const isPast = idx < activeRouteStopIndex;
     const isCurrent = idx === activeRouteStopIndex;
     return `
-      <div class="flex items-center justify-between p-1.5 rounded-lg ${isCurrent ? 'bg-amber-100/70 font-bold' : isPast ? 'opacity-50' : ''}">
+      <div class="flex items-center justify-between p-1.5 rounded-lg ${isCurrent ? 'bg-red-950/75 text-zinc-100 border border-red-900/60 font-bold' : isPast ? 'opacity-50 text-zinc-400' : 'text-zinc-300'}">
         <div class="flex items-center gap-2">
-          <span class="w-4 h-4 rounded-full ${isPast ? 'bg-emerald-500' : isCurrent ? 'bg-amber-500' : 'bg-slate-300'} text-white text-[10px] flex items-center justify-center font-bold">
+          <span class="w-4 h-4 rounded-full ${isPast ? 'bg-emerald-600' : isCurrent ? 'bg-red-600' : 'bg-zinc-700'} text-white text-[10px] flex items-center justify-center font-bold">
             ${isPast ? '✓' : idx + 1}
           </span>
           <span class="line-clamp-1">${escapeHtml(t.name)}</span>
         </div>
-        <a href="https://www.google.com/maps/dir/?api=1&destination=${t.lat},${t.lon}" target="_blank" class="text-sky-600 text-[11px] font-bold hover:underline">導航</a>
+        <a href="https://www.google.com/maps/dir/?api=1&destination=${t.lat},${t.lon}" target="_blank" class="text-red-400 text-[11px] font-bold hover:underline">導航</a>
       </div>
     `;
   }).join("");
@@ -3408,7 +3408,7 @@ window.openSavedItinerariesModal = async function() {
   try {
     const itineraries = await db.itineraries.orderBy("createdAt").reverse().toArray();
     if (itineraries.length === 0) {
-      container.innerHTML = '<p class="text-center text-slate-400 py-8 text-xs">目前尚未儲存任何規劃行程。可在規劃器運算後點擊「儲存」！</p>';
+      container.innerHTML = '<p class="text-center text-zinc-400 py-8 text-xs">目前尚未儲存任何規劃行程。可在規劃器運算後點擊「儲存」！</p>';
     } else {
       container.innerHTML = itineraries.map(itin => {
         const stopsCount = (itin.templeIds || []).length;
@@ -3422,18 +3422,18 @@ window.openSavedItinerariesModal = async function() {
         }
         const dateStr = itin.createdAt ? new Date(itin.createdAt).toLocaleDateString("zh-TW") : "";
         return `
-          <div class="p-4 bg-slate-50 hover:bg-white rounded-2xl border border-slate-200 shadow-sm transition space-y-2.5">
+          <div class="p-4 bg-zinc-950 hover:bg-zinc-800/80 rounded-2xl border border-zinc-800 shadow-sm transition space-y-2.5">
             <div class="flex items-start justify-between gap-2">
               <div>
-                <strong class="text-sm font-bold text-slate-800">${escapeHtml(displayName)}</strong>
-                <p class="text-[11px] text-slate-400">建立時間：${dateStr}・共 ${stopsCount} 間廟宇</p>
+                <strong class="text-sm font-bold text-zinc-100">${escapeHtml(displayName)}</strong>
+                <p class="text-[11px] text-zinc-400">建立時間：${dateStr}・共 ${stopsCount} 間廟宇</p>
               </div>
-              <button onclick="deleteSavedItinerary('${itin.id}')" class="text-rose-500 hover:text-rose-700 text-xs p-1" title="刪除行程">
+              <button onclick="deleteSavedItinerary('${itin.id}')" class="text-red-400 hover:text-red-300 text-xs p-1" title="刪除行程">
                 <i data-lucide="trash-2" class="w-4 h-4"></i>
               </button>
             </div>
             <div class="flex gap-2 pt-1">
-              <button onclick="loadSavedItinerary('${itin.id}')" class="flex-1 py-1.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center justify-center gap-1">
+              <button onclick="loadSavedItinerary('${itin.id}')" class="flex-1 py-1.5 bg-red-700 hover:bg-red-600 active:scale-95 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center justify-center gap-1">
                 <i data-lucide="map" class="w-3.5 h-3.5"></i> 載入地圖導航
               </button>
             </div>
@@ -3443,7 +3443,7 @@ window.openSavedItinerariesModal = async function() {
       if (window.lucide) lucide.createIcons();
     }
   } catch (err) {
-    container.innerHTML = `<p class="text-rose-500 text-xs py-4">讀取行程異常：${err.message}</p>`;
+    container.innerHTML = `<p class="text-red-400 text-xs py-4">讀取行程異常：${err.message}</p>`;
   }
 
   modal.classList.remove("hidden");
@@ -3517,17 +3517,17 @@ window.filterAddTempleList = function(keyword) {
   }).slice(0, 30);
 
   if (candidates.length === 0) {
-    container.innerHTML = '<p class="text-center text-slate-400 py-6 text-xs">查無符合關鍵字的未加入廟宇</p>';
+    container.innerHTML = '<p class="text-center text-zinc-400 py-6 text-xs">查無符合關鍵字的未加入廟宇</p>';
     return;
   }
 
   container.innerHTML = candidates.map(t => `
-    <div class="flex items-center justify-between p-2.5 bg-slate-50 hover:bg-white rounded-xl border border-slate-200 text-xs transition">
+    <div class="flex items-center justify-between p-2.5 bg-zinc-950 hover:bg-zinc-800/80 rounded-xl border border-zinc-800 text-xs transition">
       <div>
-        <strong class="text-slate-800 font-bold">${escapeHtml(t.name)}</strong>
-        <p class="text-[11px] text-slate-500">${escapeHtml(t.county)} ${escapeHtml(t.district)}</p>
+        <strong class="text-zinc-100 font-bold">${escapeHtml(t.name)}</strong>
+        <p class="text-[11px] text-zinc-400">${escapeHtml(t.county)} ${escapeHtml(t.district)}</p>
       </div>
-      <button onclick="addTempleToCalculatedRoute('${t.id}')" class="px-3 py-1 bg-brand-600 hover:bg-brand-500 text-white rounded-lg font-bold text-xs shadow-sm transition">
+      <button onclick="addTempleToCalculatedRoute('${t.id}')" class="px-3 py-1 bg-red-700 hover:bg-red-600 text-white rounded-lg font-bold text-xs shadow-sm transition">
         ＋ 加入
       </button>
     </div>
